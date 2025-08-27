@@ -29,7 +29,13 @@ const auth = getAuth(app);
 // Redirect on successful login/signup
 function redirectToIndex(user) {
     const username = user.displayName || user.email;
-    localStorage.setItem('username', username);
+    // After successful login/signup
+localStorage.setItem('userPhoto', user.photoURL || '');
+localStorage.setItem('userName', user.displayName || user.name || 'User');
+localStorage.setItem('userEmail', user.email);
+// Redirect to landing page
+
+
     window.location.href = "index_landing.html";
 }
 
@@ -117,6 +123,6 @@ import { signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth
 function logout() {
     signOut(auth).then(() => {
         localStorage.clear();
-        window.location.href = "login.html";
+        window.location.href = "index_landing.html";
     });
 }
