@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IBM Quantum Jobs Dashboard (Local)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<style>
+  @keyframes pulse-quantum {0%,100%{opacity:1}50%{opacity:0.5}}
+  .quantum-pulse{animation:pulse-quantum 2s infinite;}
+  @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  .spin-slow{animation:spin-slow 3s linear infinite;}
+  .details-row {transition: all 0.3s ease;}
+  .highlight-match {
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.3), rgba(34, 197, 94, 0.1));
+    border: 1px solid rgba(34, 197, 94, 0.5);
+    border-radius: 4px;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .slide-in { animation: slideIn 0.3s ease-out; }
+  @keyframes countUp {
+    from { transform: scale(0.8); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .count-up { animation: countUp 0.5s ease-out; }
+  .glass-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
+    /*backdrop-filter: blur(20px);*/
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .metric-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+  }
+  .metric-card:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  }
+</style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+<div class="container mx-auto px-6 py-8">
+
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <h1 class="text-5xl font-bold mb-3 bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+      IBM Quantum Dashboard
+    </h1>
+    <p class="text-gray-300 text-xl">Real-time quantum computing job monitoring & analytics</p>
+    <div class="mt-6 flex justify-center items-center space-x-6">
+      <div class="flex items-center space-x-3 glass-card px-4 py-2 rounded-full">
+        <div class="w-3 h-3 bg-green-400 rounded-full quantum-pulse"></div>
+        <span class="text-sm text-gray-200 font-medium">Live Updates</span>
+      </div>
+      <div class="text-sm text-gray-400 glass-card px-4 py-2 rounded-full">
+        Last updated: <span id="lastUpdate" class="text-white font-mono">--:--:--</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Stats Dashboard -->
+  <div class="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
+    <div class="md:col-span-4 glass-card rounded-3xl p-8 shadow-2xl">
+      <div class="flex items-center justify-between mb-8">
+        <h3 class="text-2xl font-bold text-white flex items-center">
+          <div class="w-3 h-3 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full mr-4 animate-pulse"></div>
+          System Metrics
+        </h3>
+        <div class="text-sm text-gray-300 bg-white/10 px-3 py-1 rounded-full">
+          Real-time
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <!-- Total Jobs Card -->
+        <div class="metric-card bg-gradient-to-br from-blue-500/20 to-blue-600/5 rounded-2xl p-6 border border-blue-400/20 hover:border-blue-400/40">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-blue-500/30 to-blue-600/20 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+            </div>
+            <span class="text-xs text-blue-300 font-bold tracking-wider">TOTAL</span>
+          </div>
+          <p class="text-4xl font-black text-white mb-2 count-up" id="totalJobs">0</p>
+          <p class="text-sm text-blue-200/80 font-medium">All Jobs</p>
+          <div class="mt-3 flex items-center text-xs text-blue-300">
+            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            Lifetime
+          </div>
+        </div>
+
+        <!-- Running Jobs Card -->
+        <div class="metric-card bg-gradient-to-br from-green-500/20 to-green-600/5 rounded-2xl p-6 border border-green-400/20 hover:border-green-400/40">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-green-500/30 to-green-600/20 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-green-300 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+            </div>
+            <span class="text-xs text-green-300 font-bold tracking-wider">ACTIVE</span>
+          </div>
+          <p class="text-4xl font-black text-white mb-2 count-up" id="runningJobs">0</p>
+          <p class="text-sm text-green-200/80 font-medium">Running Now</p>
+          <div class="mt-3 flex items-center text-xs text-green-300">
+            <div class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+            Processing
+          </div>
+        </div>
+
+        <!-- Queued Jobs Card -->
+        <div class="metric-card bg-gradient-to-br from-yellow-500/20 to-yellow-600/5 rounded-2xl p-6 border border-yellow-400/20 hover:border-yellow-400/40">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-yellow-500/30 to-yellow-600/20 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <span class="text-xs text-yellow-300 font-bold tracking-wider">WAITING</span>
+          </div>
+          <p class="text-4xl font-black text-white mb-2 count-up" id="queuedJobs">0</p>
+          <p class="text-sm text-yellow-200/80 font-medium">In Queue</p>
+          <div class="mt-3 flex items-center text-xs text-yellow-300">
+            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
+            </svg>
+            Pending
+          </div>
+        </div>
+
+        <!-- Success Rate Card -->
+        <div class="metric-card bg-gradient-to-br from-purple-500/20 to-purple-600/5 rounded-2xl p-6 border border-purple-400/20 hover:border-purple-400/40">
+          <div class="flex items-center justify-between mb-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-purple-500/30 to-purple-600/20 rounded-xl flex items-center justify-center">
+              <svg class="w-6 h-6 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              </svg>
+            </div>
+            <span class="text-xs text-purple-300 font-bold tracking-wider">SUCCESS</span>
+          </div>
+          <p class="text-4xl font-black text-white mb-2 count-up" id="successRate">--</p>
+          <p class="text-sm text-purple-200/80 font-medium">Success Rate</p>
+          <div class="mt-3 w-full bg-purple-900/30 rounded-full h-2 overflow-hidden">
+            <div id="successRateBar" class="bg-gradient-to-r from-purple-400 to-pink-400 h-2 rounded-full transition-all duration-1000 ease-out" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Job Form -->
+    <div class="md:col-span-2 glass-card rounded-3xl p-8 shadow-2xl">
+      <h3 class="text-xl font-bold text-white mb-6 flex items-center">
+        <svg class="w-5 h-5 mr-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+        Create Quantum Job
+      </h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Algorithm Type</label>
+          <select id="newJobType" class="w-full bg-white/10 border border-white/20 text-black rounded-xl px-4 py-3 text-sm focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all">
+            <option>Loading job types...</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Backend</label>
+          <select id="newBackend" class="w-full bg-white/10 border border-white/20 text-black rounded-xl px-4 py-3 text-sm focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all">
+            <option>Loading backends...</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">Qubits</label>
+            <input id="newQubits" class="w-full bg-white/10 border border-white/20 text-white rounded-xl px-4 py-3 text-sm focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all" type="number" min="1" max="20" value="3" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">Shots</label>
+            <input id="newShots" class="w-full bg-white/10 border border-white/20 text-white rounded-xl px-4 py-3 text-sm focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all" type="number" min="1" value="1024" />
+          </div>
+        </div>
+        <button id="createJobBtn" class="w-full px-6 py-4 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 rounded-xl text-white font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg">
+          Create Job
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analytics Charts -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="glass-card rounded-2xl p-6 shadow-xl">
+      <h3 class="text-white font-semibold mb-4 flex items-center">
+        <div class="w-2 h-2 bg-blue-400 rounded-full mr-3"></div>
+        Backend Utilization
+      </h3>
+      <div id="backendChart" class="h-48"></div>
+    </div>
+    <div class="glass-card rounded-2xl p-6 shadow-xl">
+      <h3 class="text-white font-semibold mb-4 flex items-center">
+        <div class="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
+        Job Types
+      </h3>
+      <div id="jobTypeChart" class="h-48"></div>
+    </div>
+    <div class="glass-card rounded-2xl p-6 shadow-xl">
+      <h3 class="text-white font-semibold mb-4 flex items-center">
+        <div class="w-2 h-2 bg-purple-400 rounded-full mr-3"></div>
+        Status Distribution
+      </h3>
+      <div id="statusChart" class="h-48"></div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="glass-card rounded-2xl p-6 mb-8 flex flex-wrap gap-4 items-center shadow-xl">
+    <div class="flex items-center space-x-3">
+      <label class="text-sm font-medium text-gray-300">Search Job ID:</label>
+      <input id="searchFilter" class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-white text-sm placeholder-gray-400 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition-all" 
+             type="text" placeholder="Enter Job ID..." />
+      <button id="clearSearchBtn" class="px-3 py-2 text-xs bg-gray-500/20 hover:bg-gray-500/40 rounded-lg transition-colors">Clear</button>
+    </div>
+    <div class="flex items-center space-x-3">
+      <label class="text-sm font-medium text-gray-300">Status:</label>
+      <select id="statusFilter" class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-black text-sm focus:border-cyan-400 transition-all">
+        <option value="all">All</option>
+        <option value="running">Running</option>
+        <option value="queued">Queued</option>
+        <option value="completed">Completed</option>
+        <option value="error">Error</option>
+      </select>
+    </div>
+    <div class="flex items-center space-x-3">
+      <label class="text-sm font-medium text-gray-300">Backend:</label>
+      <select id="backendFilter" class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-black text-sm focus:border-cyan-400 transition-all">
+        <option value="all">All Backends</option>
+      </select>
+    </div>
+    <button id="refreshBtn" class="ml-auto bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-6 py-2 rounded-xl text-sm font-medium transition-all duration-300 transform hover:scale-105">
+      Refresh Data
+    </button>
+  </div>
+
+  <!-- Jobs Table -->
+  <div class="glass-card rounded-2xl border border-white/20 overflow-hidden shadow-2xl">
+    <div class="p-6 border-b border-white/20 bg-gradient-to-r from-white/5 to-transparent">
+      <h2 class="text-2xl font-bold text-white flex items-center">
+        <svg class="w-6 h-6 mr-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+        </svg>
+        Quantum Computing Jobs
+      </h2>
+      <div id="searchResults" class="mt-3 text-sm text-gray-300 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2" style="display: none;"></div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gradient-to-r from-white/10 to-white/5">
+          <tr>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Job ID</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Job Type</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Backend</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Qubits</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Shots</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Queue</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Created</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Duration</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="jobsTableBody" class="divide-y divide-white/10"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const apiBase = "https://frontend-backend-aqvh.onrender.com";
+
+// ---------- WebSocket Connection ----------
+const socket = io(apiBase);
+
+socket.on('connect', () => {
+  console.log('Connected to quantum job server');
+  document.querySelector('.quantum-pulse').style.backgroundColor = '#10B981';
+});
+
+socket.on('disconnect', () => {
+  console.log('Disconnected from server');
+  document.querySelector('.quantum-pulse').style.backgroundColor = '#EF4444';
+});
+
+socket.on('job_update', (data) => {
+  console.log('Real-time job update:', data);
+  updateJobInTable(data);
+  updateStats();
+});
+
+socket.on('job_created', (data) => {
+  console.log('New job created:', data);
+  addJobToTable(data);
+  updateStats();
+  updateAnalyticsCharts();
+});
+
+socket.on('job_completed', (data) => {
+  console.log('Job completed:', data);
+  updateJobInTable(data);
+  showJobCompletionNotification(data);
+  updateStats();
+  updateAnalyticsCharts();
+});
+
+// ---------- API helpers ----------
+async function fetchJobs(){ return (await fetch(`${apiBase}/jobs`)).json(); }
+async function fetchBackends(){ return (await fetch(`${apiBase}/backends`)).json(); }
+async function fetchBackendInfo(){ return (await fetch(`${apiBase}/backends/info`)).json(); }
+async function fetchJobTypes(){ return (await fetch(`${apiBase}/job-types`)).json(); }
+async function fetchAnalytics(){ return (await fetch(`${apiBase}/analytics`)).json(); }
+async function fetchJob(id){ return (await fetch(`${apiBase}/jobs/${id}`)).json(); }
+
+function formatTimeAgo(dateStr){
+  if(!dateStr) return '--';
+  const date = new Date(dateStr);
+  const diff = Date.now() - date;
+  const mins = Math.floor(diff/60000);
+  const hrs = Math.floor(mins/60);
+  const days = Math.floor(hrs/24);
+  if(days>0) return `${days}d ago`;
+  if(hrs>0) return `${hrs}h ago`;
+  if(mins>0) return `${mins}m ago`;
+  return 'Just now';
+}
+
+function formatDuration(duration){
+  if(duration === null || duration === undefined) return '--';
+  const secs = typeof duration === 'number' ? duration : parseFloat(duration) || 0;
+  if(secs < 1) return `${Math.round(secs*1000)}ms`;
+  const m = Math.floor(secs/60);
+  const s = (secs % 60).toFixed(2);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+async function updateStats(jobs = null){
+  if (!jobs) {
+    jobs = await fetchJobs();
+  }
+  
+  // Animate counter updates
+  animateCounter('totalJobs', jobs.length);
+  animateCounter('runningJobs', jobs.filter(j=>j.Status==='Running').length);
+  animateCounter('queuedJobs', jobs.filter(j=>j.Status==='Queued').length);
+  
+  const completed = jobs.filter(j=>j.Status==='Completed').length;
+  const failed = jobs.filter(j=>j.Status==='Error').length;
+  const total = completed + failed;
+  const successRate = total > 0 ? Math.round((completed/total)*100) : 0;
+  
+  document.getElementById('successRate').textContent = `${successRate}%`;
+  
+  // Animate success rate bar
+  const successBar = document.getElementById('successRateBar');
+  setTimeout(() => {
+    successBar.style.width = `${successRate}%`;
+  }, 300);
+}
+
+function animateCounter(elementId, targetValue) {
+  const element = document.getElementById(elementId);
+  const currentValue = parseInt(element.textContent) || 0;
+  
+  if (currentValue === targetValue) return;
+  
+  element.classList.add('count-up');
+  
+  const increment = targetValue > currentValue ? 1 : -1;
+  const duration = Math.abs(targetValue - currentValue) * 50; // 50ms per step
+  const steps = Math.abs(targetValue - currentValue);
+  const stepDuration = Math.min(duration / steps, 100);
+  
+  let current = currentValue;
+  const timer = setInterval(() => {
+    current += increment;
+    element.textContent = current;
+    
+    if (current === targetValue) {
+      clearInterval(timer);
+      setTimeout(() => element.classList.remove('count-up'), 500);
+    }
+  }, stepDuration);
+}
+
+// Real-time update functions for WebSocket
+function updateJobInTable(jobData) {
+  const row = document.getElementById(`row_${jobData['Job ID']}`);
+  if (!row) return;
+
+  const statusEl = row.querySelector('.status-badge');
+  if (statusEl) {
+    statusEl.textContent = jobData.Status;
+    const statusColors = {
+      'Running': 'border-green-400 text-green-400 bg-green-500/20',
+      'Queued': 'border-yellow-400 text-yellow-400 bg-yellow-500/20',
+      'Completed': 'border-purple-400 text-purple-400 bg-purple-500/20',
+      'Error': 'border-red-400 text-red-400 bg-red-500/20',
+      'Cancelled': 'border-gray-400 text-gray-400 bg-gray-500/20'
+    };
+    statusEl.className = `status-badge px-3 py-1 rounded-full text-xs font-medium border ${statusColors[jobData.Status]}`;
+  }
+
+  const queueEl = row.querySelector('.queue');
+  if (queueEl) {
+    queueEl.textContent = jobData['Queue Position'] !== null ? `#${jobData['Queue Position']}` : '--';
+  }
+
+  const durationEl = row.querySelector('.duration');
+  if (durationEl) {
+    durationEl.textContent = formatDuration(jobData.Duration);
+  }
+}
+
+function addJobToTable(jobData) {
+  if (document.getElementById(`row_${jobData['Job ID']}`)) return;
+  renderJobs();
+}
+
+function showJobCompletionNotification(jobData) {
+  const notification = document.createElement('div');
+  notification.className = 'fixed top-6 right-6 glass-card text-white px-6 py-4 rounded-2xl shadow-2xl z-50 slide-in border border-green-400/30';
+  notification.innerHTML = `
+    <div class="flex items-center space-x-4">
+      <div class="w-12 h-12 bg-gradient-to-br from-green-500/30 to-green-600/20 rounded-xl flex items-center justify-center">
+        <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+      </div>
+      <div>
+        <p class="font-bold text-lg">Job ${jobData['Job ID']} Completed!</p>
+        <p class="text-sm text-gray-300">${jobData['Job Type']} on ${jobData.Backend}</p>
+        <p class="text-xs text-green-400 mt-1">Duration: ${formatDuration(jobData.Duration)}</p>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.opacity = '0';
+    notification.style.transform = 'translateX(100%)';
+    setTimeout(() => notification.remove(), 300);
+  }, 5000);
+}
+
+// ---------- Analytics Charts ----------
+async function updateAnalyticsCharts() {
+  try {
+    const analytics = await fetchAnalytics();
+    
+    const chartConfig = {
+      margin: {t: 20, l: 40, r: 20, b: 40},
+      paper_bgcolor: 'transparent',
+      plot_bgcolor: 'transparent',
+      font: { color: 'white', size: 11 },
+      xaxis: { color: 'white', gridcolor: 'rgba(255,255,255,0.1)' },
+      yaxis: { color: 'white', gridcolor: 'rgba(255,255,255,0.1)' }
+    };
+    
+    // Backend utilization chart
+    const backendData = [{
+      x: Object.keys(analytics.backend_utilization),
+      y: Object.values(analytics.backend_utilization),
+      type: 'bar',
+      marker: { 
+        color: 'rgba(139, 92, 246, 0.8)',
+        line: { color: 'rgba(139, 92, 246, 1)', width: 1 }
+      }
+    }];
+    Plotly.newPlot('backendChart', backendData, chartConfig, { responsive: true, displayModeBar: false });
+
+    // Job types pie chart
+    const jobTypeData = [{
+      labels: Object.keys(analytics.job_type_distribution),
+      values: Object.values(analytics.job_type_distribution),
+      type: 'pie',
+      marker: { 
+        colors: ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1'],
+        line: { color: 'rgba(255,255,255,0.2)', width: 1 }
+      },
+      textfont: { color: 'white' }
+    }];
+    Plotly.newPlot('jobTypeChart', jobTypeData, {
+      ...chartConfig,
+      showlegend: false
+    }, { responsive: true, displayModeBar: false });
+
+    // Status distribution
+    const statusData = [{
+      x: Object.keys(analytics.status_distribution),
+      y: Object.values(analytics.status_distribution),
+      type: 'bar',
+      marker: { 
+        color: ['#10B981', '#F59E0B', '#8B5CF6', '#EF4444'],
+        line: { color: 'rgba(255,255,255,0.2)', width: 1 }
+      }
+    }];
+    Plotly.newPlot('statusChart', statusData, chartConfig, { responsive: true, displayModeBar: false });
+
+  } catch (err) {
+    console.error('Failed to update analytics:', err);
+  }
+}
+
+// ---------- Create job ----------
+// ---------- Create job ----------
+document.getElementById('createJobBtn').addEventListener('click', async ()=>{
+  const jobType = document.getElementById('newJobType').value;
+  const backend = document.getElementById('newBackend').value;
+  const qubits = parseInt(document.getElementById('newQubits').value) || 3;
+  const shots = parseInt(document.getElementById('newShots').value) || 1024;
+  
+  const btn = document.getElementById('createJobBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin-slow inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>Creating...';
+  
+  try {
+    const res = await fetch(`${apiBase}/jobs/new`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({job_type: jobType, backend, qubits, shots})
+    });
+    
+    if(res.status === 201){
+      renderJobs();
+      updateAnalyticsCharts();
+      
+      // Success feedback
+      btn.innerHTML = '✅ Job Created!';
+      btn.className = btn.className.replace('from-cyan-500 to-purple-500', 'from-green-500 to-green-600');
+      
+      // Wait 2s, reset button, then reload full page
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.className = btn.className.replace('from-green-500 to-green-600', 'from-cyan-500 to-purple-500');
+        btn.disabled = false;
+        window.location.reload();   // ✅ Force full refresh
+      }, 1000);
+    } else {
+      const err = await res.json();
+      alert("Error creating job: " + (err.error || JSON.stringify(err)));
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  } catch (error) {
+    alert("Network error: " + error.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  renderJobs();
+  updateAnalyticsCharts();
+});
+
+
+// ---------- View job progress (NEW FUNCTION) ----------
+async function viewJobProgress(jobId, btnEl) {
+  try {
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.innerHTML = '<div class="spin-slow inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>Checking status...';
+    }
+
+    // Fetch current job status
+    const job = await fetchJob(jobId);
+    
+    if (job.Status === 'Completed') {
+      // Job finished! Show completion message and refresh
+      document.getElementById(`jobMessage_${jobId}`).innerHTML = '✅ <strong>Job Completed!</strong> Refreshing results...';
+      setTimeout(() => {
+        renderJobs(); // This will show the completed job with results
+      }, 1500);
+    } else if (job.Status === 'Running') {
+      // Still running, update message
+      document.getElementById(`jobMessage_${jobId}`).innerHTML = '🔄 <strong>Still processing...</strong> Quantum circuits are executing on the backend.';
+      if (btnEl) {
+        btnEl.innerHTML = '🔄 Refresh Status';
+      }
+    } else if (job.Status === 'Error') {
+      // Job failed
+      document.getElementById(`jobMessage_${jobId}`).innerHTML = `❌ <strong>Job Failed:</strong> ${job.Error}`;
+      if (btnEl) {
+        btnEl.style.display = 'none';
+      }
+    }
+
+  } catch (err) {
+    console.error('Failed to check job progress:', err);
+    if (btnEl) {
+      btnEl.innerHTML = '❌ Check Failed';
+    }
+  } finally {
+    if (btnEl) {
+      btnEl.disabled = false;
+    }
+  }
+}
+
+// ---------- Run job ----------
+async function runJob(jobId, btnEl){
+  try {
+    if(btnEl) { 
+      btnEl.disabled = true; 
+      btnEl.innerHTML = '<div class="spin-slow inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>Running...';
+    }
+    
+    const res = await fetch(`${apiBase}/jobs/run/${jobId}`, { method: "POST" });
+    const data = await res.json();
+    
+    if(res.status !== 200){
+      alert("Run error: " + (data.error || JSON.stringify(data)));
+      if(btnEl) { btnEl.disabled = false; btnEl.textContent = 'Run Job'; }
+      renderJobs();
+      return;
+    }
+
+    setTimeout(() => {
+      const histogramId = `hist_${jobId}`;
+      const tableId = `table_${jobId}`;
+      
+      const histogramDiv = document.getElementById(histogramId);
+      const tableEl = document.getElementById(tableId);
+      
+      if(histogramDiv && data.counts){
+        Plotly.newPlot(histogramId, [{
+          x: Object.keys(data.counts), 
+          y: Object.values(data.counts), 
+          type: 'bar',
+          marker: { 
+            color: 'rgba(34, 197, 94, 0.8)',
+            line: { color: 'rgba(34, 197, 94, 0.8)', width: 1 }
+          }
+        }], {
+          margin: { t: 20, l: 40, r: 20, b: 40 },
+          paper_bgcolor: 'transparent',
+          plot_bgcolor: 'transparent',
+          font: { color: 'white' },
+          xaxis: { title: "Quantum State", color: 'white', gridcolor: 'rgba(255,255,255,0.1)' },
+          yaxis: { title: "Measurement Counts", color: 'white', gridcolor: 'rgba(255,255,255,0.1)' }
+        }, { responsive: true, displayModeBar: false });
+      }
+      
+      if(tableEl && data.counts){
+        renderMeasurementTable(tableId, data.counts);
+      }
+    }, 100);
+
+  } catch(err){
+    alert("Request failed: " + err);
+  } finally {
+    if(btnEl){ 
+      btnEl.disabled = false; 
+      btnEl.textContent = 'View Details'; 
+    }
+    setTimeout(() => {
+      renderJobs();
+      updateAnalyticsCharts();
+    }, 1000);
+  }
+}
+
+// ---------- Enhanced Measurement Table with Collapse ----------
+function renderMeasurementTable(tableId, counts) {
+  const tableEl = document.getElementById(tableId);
+  if (!tableEl) return;
+  
+  const tbody = tableEl.querySelector('tbody');
+  tbody.innerHTML = '';
+  
+  const totalShots = Object.values(counts).reduce((a, b) => a + b, 0);
+  const maxCount = Math.max(...Object.values(counts));
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]); // Sort by count descending
+  
+  const showLimit = 5; // Show only first 5 rows initially
+  const shouldCollapse = entries.length > showLimit;
+  
+  entries.forEach(([state, count], index) => {
+    const row = document.createElement('tr');
+    const probability = ((count / totalShots) * 100).toFixed(2);
+    
+    row.className = `measurement-row ${index >= showLimit && shouldCollapse ? 'hidden' : ''} hover:bg-white/5 transition-colors`;
+    row.innerHTML = `
+      <td class="px-4 py-3 border border-white/10 font-mono text-cyan-300 text-sm">${state}</td>
+      <td class="px-4 py-3 border border-white/10 text-center text-sm font-semibold">${count.toLocaleString()}</td>
+      <td class="px-4 py-3 border border-white/10 text-center text-purple-300 text-sm font-semibold">${probability}%</td>
+    `;
+    
+    const intensity = count / maxCount;
+    row.style.background = `linear-gradient(90deg, rgba(139, 92, 246, ${intensity * 0.2}) 0%, transparent 100%)`;
+    tbody.appendChild(row);
+  });
+  
+  // Add expand/collapse button if needed
+  if (shouldCollapse) {
+    const expandRow = document.createElement('tr');
+    expandRow.innerHTML = `
+      <td colspan="3" class="px-4 py-3 text-center border-t border-white/20">
+        <button class="expand-btn px-4 py-2 bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 border border-blue-400/30 rounded-lg text-sm font-medium transition-all duration-300 flex items-center mx-auto">
+          <svg class="w-4 h-4 mr-2 expand-icon transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+          Show ${entries.length - showLimit} more results
+        </button>
+      </td>
+    `;
+    tbody.appendChild(expandRow);
+    
+    // Add click handler for expand/collapse
+    const expandBtn = expandRow.querySelector('.expand-btn');
+    const expandIcon = expandRow.querySelector('.expand-icon');
+    let isExpanded = false;
+    
+    expandBtn.addEventListener('click', () => {
+      const hiddenRows = tbody.querySelectorAll('.measurement-row.hidden');
+      
+      if (!isExpanded) {
+        // Expand
+        hiddenRows.forEach((row, index) => {
+          setTimeout(() => {
+            row.classList.remove('hidden');
+            row.classList.add('slide-in');
+          }, index * 50);
+        });
+        expandBtn.innerHTML = `
+          <svg class="w-4 h-4 mr-2 expand-icon transition-transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+          Show less
+        `;
+        isExpanded = true;
+      } else {
+        // Collapse
+        const allRows = tbody.querySelectorAll('.measurement-row');
+        allRows.forEach((row, index) => {
+          if (index >= showLimit) {
+            row.classList.add('hidden');
+            row.classList.remove('slide-in');
+          }
+        });
+        expandBtn.innerHTML = `
+          <svg class="w-4 h-4 mr-2 expand-icon transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+          Show ${entries.length - showLimit} more results
+        `;
+        isExpanded = false;
+      }
+    });
+  }
+}
+
+// ---------- Toggle job details ----------
+async function toggleDetails(jobId) {
+  const detailsRow = document.getElementById(`details_${jobId}`);
+  if (detailsRow.style.display === 'table-row') {
+    detailsRow.style.display = 'none';
+    return;
+  }
+  detailsRow.style.display = 'table-row';
+  detailsRow.classList.add('slide-in');
+
+  const job = await fetchJob(jobId);
+
+  if (job.Status === 'Cancelled') {
+    detailsRow.innerHTML = `
+      <td colspan="10" class="p-8 text-center">
+        <div class="glass-card border-red-500/30 rounded-2xl p-8 max-w-md mx-auto">
+          <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </div>
+          <p class="text-red-400 font-bold text-lg mb-2">Job Cancelled</p>
+          <p class="text-gray-300">This quantum job was cancelled and will not execute.</p>
+        </div>
+      </td>`;
+    return;
+  }
+
+  if (job.Status === 'Error') {
+    detailsRow.innerHTML = `
+      <td colspan="10" class="p-8 text-center">
+        <div class="glass-card border-red-500/30 rounded-2xl p-8 max-w-md mx-auto">
+          <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <p class="text-red-400 font-bold text-lg mb-2">Job Failed</p>
+          <p class="text-gray-300 text-sm bg-red-500/10 border border-red-500/30 rounded-lg p-3">${job.Error}</p>
+        </div>
+      </td>`;
+    return;
+  }
+
+  if (job.Status === 'Completed') {
+    detailsRow.innerHTML = `
+      <td colspan="10" class="p-8">
+        <div class="glass-card rounded-2xl p-8">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+              <h4 class="text-white font-bold text-lg mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                Quantum Measurement Results
+              </h4>
+              <div id="hist_${jobId}" class="h-80 glass-card rounded-xl p-4"></div>
+            </div>
+            <div>
+              <h4 class="text-white font-bold text-lg mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2a2 2 0 002-2z"></path>
+                </svg>
+                Measurement Data
+              </h4>
+              <div class="glass-card rounded-xl overflow-hidden">
+                <table id="table_${jobId}" class="w-full text-sm">
+                  <thead class="bg-white/10">
+                    <tr>
+                      <th class="px-4 py-3 text-left text-gray-300 font-semibold">State</th>
+                      <th class="px-4 py-3 text-center text-gray-300 font-semibold">Count</th>
+                      <th class="px-4 py-3 text-center text-gray-300 font-semibold">Probability</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          ${job["Circuit Diagram"] ? `
+            <div class="mt-8">
+              <h4 class="text-white font-bold text-lg mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                </svg>
+                Quantum Circuit Diagram
+              </h4>
+              <div class="bg-white rounded-2xl p-6 shadow-xl">
+                <img src="data:image/png;base64,${job["Circuit Diagram"]}" class="w-full max-w-5xl mx-auto rounded-lg" alt="Quantum Circuit" />
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </td>`;
+    
+    setTimeout(() => renderJobResult(jobId, job.Result), 100);
+    return;
+  }
+
+  // Queued or Running jobs
+  detailsRow.innerHTML = `
+    <td colspan="10" class="p-8 text-center">
+      <div class="glass-card rounded-2xl p-8 max-w-2xl mx-auto">
+        <div class="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+          ${job.Status === 'Queued' ? 
+            '<svg class="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>' : 
+            '<svg class="w-10 h-10 text-green-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'
+          }
+        </div>
+        <p id="jobMessage_${jobId}" class="text-white text-xl font-semibold mb-6">
+          ${job.Status === 'Queued' ? 
+            `⏳ Waiting in queue (Position: ${job['Queue Position'] ?? 'Unknown'})` : 
+            '🔄 Quantum circuit executing...'}
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-sm">
+          <div class="glass-card p-4 rounded-xl">
+            <p class="text-gray-400 mb-1">Job Type</p>
+            <p class="text-white font-semibold">${job['Job Type']}</p>
+          </div>
+          <div class="glass-card p-4 rounded-xl">
+            <p class="text-gray-400 mb-1">Circuit Depth</p>
+            <p class="text-white font-semibold">${job['Circuit Depth']} gates</p>
+          </div>
+          <div class="glass-card p-4 rounded-xl">
+            <p class="text-gray-400 mb-1">Est. Queue Time</p>
+            <p class="text-white font-semibold">${job['Estimated Queue Time']}</p>
+          </div>
+        </div>
+        <div class="flex justify-center space-x-4">
+          <button id="runbtn_${jobId}" class="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg">
+            ${job.Status === 'Queued' ? '▶️ Execute Job' : '👁️ View Progress'}
+          </button>
+          <button id="cancelbtn_${jobId}" class="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg">
+            ❌ Cancel Job
+          </button>
+        </div>
+      </div>
+    </td>`;
+
+  // Add event listeners with FIXED LOGIC
+  const runBtn = document.getElementById(`runbtn_${jobId}`);
+  const cancelBtn = document.getElementById(`cancelbtn_${jobId}`);
+
+  if (runBtn) {
+    runBtn.addEventListener('click', async (e) => {
+      if (job.Status === 'Queued') {
+        // Execute the job
+        await runJob(jobId, e.target);
+      } else if (job.Status === 'Running') {
+        // View progress - just refresh status, DON'T run the job
+        await viewJobProgress(jobId, e.target);
+      }
+    });
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      e.target.innerHTML = '<div class="spin-slow inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>Cancelling...';
+      
+      try {
+        const res = await fetch(`${apiBase}/jobs/cancel/${jobId}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Cancel failed');
+        
+        document.getElementById(`jobMessage_${jobId}`).innerHTML = '❌ <strong>Job Cancelled</strong>';
+        runBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        
+        setTimeout(() => renderJobs(), 1000);
+      } catch (err) {
+        alert("Cancel failed: " + err.message);
+        e.target.disabled = false;
+        e.target.innerHTML = '❌ Cancel Job';
+      }
+    });
+  }
+}
+
+function renderJobResult(jobId, data) {
+  if (!data || !data.counts) return;
+  
+  const histogramId = `hist_${jobId}`;
+  const tableId = `table_${jobId}`;
+
+  // Render histogram
+  Plotly.newPlot(histogramId, [{
+    x: Object.keys(data.counts),
+    y: Object.values(data.counts),
+    type: 'bar',
+    marker: { 
+      color: 'rgba(37, 99, 235, 1)',
+      line: { color: 'rgba(37, 99, 235, 1)', width: 1 }
+    }
+  }], {
+    margin: { t: 20, l: 40, r: 20, b: 40 },
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { color: 'white' },
+    xaxis: { title: "Quantum State", color: 'white', gridcolor: 'rgba(255,255,255,0.1)' },
+    yaxis: { title: "Counts", color: 'white', gridcolor: 'rgba(255,255,255,0.1)' }
+  }, { responsive: true, displayModeBar: false });
+
+  // Fill results table with collapse functionality
+  renderMeasurementTable(tableId, data.counts);
+}
+
+// ---------- Render jobs list ----------
+async function renderJobs() {
+  const tbody = document.getElementById('jobsTableBody');
+  tbody.innerHTML = '';
+  
+  try {
+    const [jobs, backends, jobTypes] = await Promise.all([
+      fetchJobs(),
+      fetchBackends(), 
+      fetchJobTypes()
+    ]);
+
+    // Populate dropdowns
+    const backendFilter = document.getElementById('backendFilter');
+    const backendSelect = document.getElementById('newBackend');
+    const jobTypeSelect = document.getElementById('newJobType');
+    
+    backendFilter.innerHTML = `<option value="all">All Backends</option>${backends.map(b=>`<option value="${b}">${b}</option>`).join('')}`;
+    backendSelect.innerHTML = backends.map(b=>`<option value="${b}">${b}</option>`).join('');
+    jobTypeSelect.innerHTML = jobTypes.map(jt=>`<option value="${jt}">${jt}</option>`).join('');
+
+    updateStats(jobs);
+
+    // Apply filters
+    const statusFilterVal = document.getElementById('statusFilter').value;
+    const backendFilterVal = document.getElementById('backendFilter').value;
+    const searchFilterVal = document.getElementById('searchFilter').value.trim().toLowerCase();
+
+    let filteredJobs = jobs.filter(job => {
+      if (statusFilterVal !== 'all' && job.Status.toLowerCase() !== statusFilterVal) return false;
+      if (backendFilterVal !== 'all' && job.Backend !== backendFilterVal) return false;
+      if (searchFilterVal && !String(job['Job ID']).toLowerCase().includes(searchFilterVal)) return false;
+      return true;
+    });
+
+    // Update search results
+    const searchResults = document.getElementById('searchResults');
+    if (searchFilterVal) {
+      searchResults.style.display = 'block';
+      searchResults.innerHTML = `
+        <div class="flex items-center">
+          <svg class="w-4 h-4 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          Found <strong>${filteredJobs.length}</strong> job(s) matching "<strong>${searchFilterVal}</strong>"
+        </div>
+      `;
+    } else {
+      searchResults.style.display = 'none';
+    }
+
+    // Render jobs
+    filteredJobs.forEach(job => {
+      const row = document.createElement('tr');
+      row.id = `row_${job['Job ID']}`;
+      row.className = 'hover:bg-white/5 transition-all duration-200 border-b border-white/5';
+      
+      const jobIdStr = String(job['Job ID']);
+      const jobIdDisplay = searchFilterVal && jobIdStr.toLowerCase().includes(searchFilterVal) 
+        ? jobIdStr.replace(new RegExp(`(${searchFilterVal})`, 'gi'), '<span class="bg-green-400/30 px-1 rounded">$1</span>')
+        : jobIdStr;
+      
+      const statusColors = {
+        'Running': 'border-green-400 text-green-400 bg-green-500/20',
+        'Queued': 'border-yellow-400 text-yellow-400 bg-yellow-500/20',
+        'Completed': 'border-purple-400 text-purple-400 bg-purple-500/20',
+        'Error': 'border-red-400 text-red-400 bg-red-500/20',
+        'Cancelled': 'border-gray-400 text-gray-400 bg-gray-500/20'
+      };
+      
+      row.innerHTML = `
+        <td class="px-6 py-4 font-mono text-sm text-cyan-400 font-semibold">${jobIdDisplay}</td>
+        <td class="px-6 py-4">
+          <span class="status-badge px-3 py-1 rounded-full text-xs font-medium border ${statusColors[job.Status] || 'border-gray-400 text-gray-400 bg-gray-500/20'}">
+            ${job.Status}
+          </span>
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-300 font-medium">${job['Job Type']}</td>
+        <td class="px-6 py-4 text-sm text-gray-300">${job.Backend}</td>
+        <td class="px-6 py-4 text-sm text-gray-300 font-mono">${job.Qubits}</td>
+        <td class="px-6 py-4 text-sm text-gray-300 font-mono">${job.Shots.toLocaleString()}</td>
+        <td class="queue px-6 py-4 text-sm text-gray-300 font-mono">${job['Queue Position'] !== null ? `#${job['Queue Position']}` : '--'}</td>
+        <td class="px-6 py-4 text-sm text-gray-300">${formatTimeAgo(job.Created)}</td>
+        <td class="duration px-6 py-4 text-sm text-gray-300 font-mono">${formatDuration(job.Duration)}</td>
+        <td class="px-6 py-4">
+          <button id="view_${job['Job ID']}" class="px-4 py-2 text-xs bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 rounded-lg font-medium transition-all duration-300 transform hover:scale-105 shadow-md">
+            View Details
+          </button>
+        </td>`;
+      tbody.appendChild(row);
+
+      // Details row
+      const detailsRow = document.createElement('tr');
+      detailsRow.id = `details_${job['Job ID']}`;
+      detailsRow.className = 'details-row bg-white/2';
+      detailsRow.style.display = 'none';
+      tbody.appendChild(detailsRow);
+
+      // Event listener
+      document.getElementById(`view_${job['Job ID']}`).addEventListener('click', () => toggleDetails(job['Job ID']));
+    });
+
+    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+    
+  } catch (err) {
+    console.error('Failed to render jobs:', err);
+  }
+}
+
+// ---------- Connection Status Updates ----------
+function updateConnectionStatus() {
+  document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+}
+
+// ---------- Event listeners ----------
+document.getElementById('searchFilter').addEventListener('input', renderJobs);
+document.getElementById('clearSearchBtn').addEventListener('click', () => {
+  document.getElementById('searchFilter').value = '';
+  renderJobs();
+});
+
+document.getElementById('statusFilter').addEventListener('change', renderJobs);
+document.getElementById('backendFilter').addEventListener('change', renderJobs);
+
+// ---------- Initialize ----------
+renderJobs();
+updateAnalyticsCharts();
+
+// Real-time updates via WebSocket (no more polling!)
+setInterval(updateAnalyticsCharts, 30000); // Analytics every 30 seconds
+setInterval(updateConnectionStatus, 1000); // Clock update every second
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'975b2c34a4cf7f1f',t:'MTc1NjI5MzU1My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
