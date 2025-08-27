@@ -660,9 +660,9 @@ def delete_job(job_id):
 if __name__ == "__main__":
     # Create some initial jobs if database is empty
     if not jobs:
-        create_job("ibm_brisbane", 5, 2048, "Bell State")
-        create_job("ibm_kyoto", 8, 1024, "Grover's Algorithm")
-        create_job("simulator_mps", 12, 4096, "VQE")
-        create_job("ibm_sherbrooke", 6, 1024, "Shor's Algorithm")
+        create_job("ibm_brisbane", 2, 1024, "Bell State")
+        create_job("ibm_kyoto", 2, 1024, "Grover's Algorithm")
+        create_job("simulator_mps", 3, 1024, "VQE")
+        create_job("ibm_sherbrooke", 2, 1024, "Shor's Algorithm")
     
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
