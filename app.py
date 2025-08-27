@@ -15,6 +15,11 @@ app.config['SECRET_KEY'] = 'quantum_secret_key_2024'
 CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+@app.route("/")
+def home():
+    return jsonify({"message": "Quantum Dashboard Backend is running!"})
+
+
 # ---------- Database Setup ----------
 def init_database():
     conn = sqlite3.connect('quantum_jobs.db')
