@@ -1,0 +1,10 @@
+Flask
+Flask-Cors
+requests
+qiskit
+qiskit-aer
+matplotlib
+gunicorn
+flask-socketio
+eventlet
+gevent
