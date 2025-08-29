@@ -379,6 +379,30 @@
     </style>
 </head>
 <body class="min-h-screen text-white overflow-x-hidden">
+<div class="absolute top-6 right-8 flex items-center space-x-4 z-50">
+  <div id="userInfo" class="relative">
+   
+    <button id="userIconBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-purple-400 flex items-center justify-center shadow-lg hover:scale-105 transition-transform overflow-hidden">
+  <img id="userPhoto" src="" alt="Profile" class="w-full h-full object-cover" style="display:none;" />
+  <span id="defaultUserLetter" class="text-white text-xl font-bold" style="display:none;"></span>
+</button>
+    <div id="userPopup" class="absolute right-0 mt-2 w-64 bg-slate-900 border border-white/10 rounded-xl shadow-xl p-4 text-left z-50 hidden">
+      <div class="flex items-center space-x-3 mb-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-purple-400 flex items-center justify-center">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.805 5.879 2.146M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <div>
+          <div id="userName" class="font-bold text-white">User</div>
+          <div id="userEmail" class="text-xs text-gray-300">user@email.com</div>
+        </div>
+      </div>
+      <button id="logoutBtn" class="w-full px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 rounded-lg text-white font-semibold hover:scale-105 transition-transform">Logout</button>
+    </div>
+  </div>
+</div>
+
     <div id="particles" class="fixed inset-0 pointer-events-none"></div>
     
     <!-- Notification Container -->
@@ -651,7 +675,7 @@
     </main>
 
     <script>
-        const API_BASE = 'http://localhost:5000';
+        const API_BASE = 'https://frontend-backend-aqvh.onrender.com';
         let currentCircuitData = { gates: [] };
         let draggedGate = null;
         let allJobs = []; // Store all jobs for filtering
@@ -2322,11 +2346,58 @@
             `;
         }
 
+
+
+// --- User Icon Popup & Logout ---
+const userIconBtn = document.getElementById('userIconBtn');
+const userPopup = document.getElementById('userPopup');
+const logoutBtn = document.getElementById('logoutBtn');
+
+// Example: Get user info from localStorage (set on login)
+const userName = localStorage.getItem('userName') || 'User';
+const userEmail = localStorage.getItem('userEmail') || 'user@email.com';
+document.getElementById('userName').textContent = userName;
+document.getElementById('userEmail').textContent = userEmail;
+
+userIconBtn.addEventListener('click', () => {
+  userPopup.classList.toggle('hidden');
+});
+
+logoutBtn.addEventListener('click', () => {
+  // Clear user info and redirect to login
+  localStorage.clear();
+  window.location.href = 'index.html';
+});
+
+// Hide popup when clicking outside
+document.addEventListener('click', (e) => {
+  if (!userPopup.contains(e.target) && !userIconBtn.contains(e.target)) {
+    userPopup.classList.add('hidden');
+  }
+});
+const userPhotoUrl = localStorage.getItem('userPhoto');
+const userPhotoImg = document.getElementById('userPhoto');
+const defaultUserLetter = document.getElementById('defaultUserLetter');
+
+if (userPhotoUrl && userPhotoUrl !== '') {
+  userPhotoImg.src = userPhotoUrl;
+  userPhotoImg.style.display = 'block';
+  defaultUserLetter.style.display = 'none';
+} else {
+  userPhotoImg.style.display = 'none';
+  // Get first letter of email
+  const email = localStorage.getItem('userEmail') || 'U';
+  defaultUserLetter.textContent = email.trim()[0].toUpperCase();
+  defaultUserLetter.style.display = 'block';
+}
         // Event listeners
 
         // Initialize the application
         init();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9767180100e09371',t:'MTc1NjQxODU1NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9767180100e09371',t:'MTc1NjQxODU1NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+
+
+</body>
 </html>
 
