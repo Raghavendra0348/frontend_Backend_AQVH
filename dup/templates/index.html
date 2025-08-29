@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Quantum Job Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; text-align: center; }
+        table { border-collapse: collapse; width: 90%; margin: auto; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        button { padding: 5px 10px; cursor: pointer; }
+        .detail-cell { padding: 10px; background-color: #fafafa; }
+        .detail-container { display: flex; justify-content: space-between; }
+        .histogram-container { width: 48%; height: 300px; }
+        .counts-table { border-collapse: collapse; width: 48%; margin: auto; }
+        .counts-table th, .counts-table td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+        .counts-table th { background-color: #e0e0e0; }
+    </style>
+</head>
+<body>
+    <h1>Quantum Job Dashboard</h1>
+    <table id="jobsTable">
+        <thead>
+            <tr>
+                <th>Job ID</th>
+                <th>Status</th>
+                <th>Backend</th>
+                <th>Qubits</th>
+                <th>Shots</th>
+                <th>Queue Position</th>
+                <th>Created</th>
+                <th>Duration</th>
+                <th>View Details</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        async function loadJobs() {
+            let response = await fetch("http://127.0.0.1:5000/jobs");
+            let jobs = await response.json();
+
+            let tbody = document.querySelector("#jobsTable tbody");
+            tbody.innerHTML = "";
+
+            jobs.forEach(job => {
+                let row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${job["Job ID"]}</td>
+                    <td>${job["Status"]}</td>
+                    <td>${job["Backend"]}</td>
+                    <td>${job["Qubits"]}</td>
+                    <td>${job["Shots"]}</td>
+                    <td>${job["Queue Position"]}</td>
+                    <td>${job["Created"]}</td>
+                    <td>${job["Duration"]}</td>
+                    <td><button class="view-details-btn">View Details</button></td>
+                `;
+                tbody.appendChild(row);
+
+                let btn = row.querySelector(".view-details-btn");
+                btn.addEventListener("click", async () => {
+                    let nextRow = row.nextElementSibling;
+                    if (nextRow && nextRow.classList.contains("detail-row")) {
+                        nextRow.remove();
+                        btn.textContent = "View Details";
+                        return;
+                    }
+
+                    // Collapse other open details
+                    document.querySelectorAll(".detail-row").forEach(r => r.remove());
+                    document.querySelectorAll(".view-details-btn").forEach(b => b.textContent = "View Details");
+
+                    // Create detail row dynamically
+                    let detailRow = document.createElement("tr");
+                    detailRow.classList.add("detail-row");
+                    let detailCell = document.createElement("td");
+                    detailCell.colSpan = 9;
+                    detailCell.classList.add("detail-cell");
+
+                    detailCell.innerHTML = `
+                        <div class="detail-container">
+                            <div class="histogram-container" id="histogram-${job["Job ID"]}"></div>
+                            <table class="counts-table" id="countsTable-${job["Job ID"]}">
+                                <thead><tr><th>Outcome</th><th>Counts</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    `;
+                    detailRow.appendChild(detailCell);
+                    row.after(detailRow);
+                    btn.textContent = "Hide Details";
+
+                    // Fetch histogram
+                    let res = await fetch(`http://127.0.0.1:5000/jobs/run/${job["Job ID"]}`, { method: "POST" });
+                    let data = await res.json();
+                    let counts = data.counts;
+
+                    // Plot histogram
+                    let labels = Object.keys(counts);
+                    let values = Object.values(counts);
+                    let trace = { x: labels, y: values, type: 'bar' };
+                    let layout = { title: `Job ${job["Job ID"]} Result`, xaxis:{title:"Outcome"}, yaxis:{title:"Counts"} };
+                    Plotly.newPlot(`histogram-${job["Job ID"]}`, [trace], layout, {responsive:true});
+
+                    // Populate counts table
+                    let tbodyCounts = document.querySelector(`#countsTable-${job["Job ID"]} tbody`);
+                    tbodyCounts.innerHTML = "";
+                    let maxCount = Math.max(...values);
+                    for (const [k,v] of Object.entries(counts)) {
+                        let tr = document.createElement("tr");
+                        let tdOutcome = document.createElement("td"); tdOutcome.textContent = k;
+                        let tdCount = document.createElement("td"); tdCount.textContent = v;
+                        let intensity = Math.floor((v/maxCount)*255);
+                        tdCount.style.backgroundColor = `rgb(${255-intensity}, ${255-intensity}, 255)`;
+                        tr.appendChild(tdOutcome); tr.appendChild(tdCount);
+                        tbodyCounts.appendChild(tr);
+                    }
+                });
+            });
+        }
+
+        loadJobs();
+    </script>
+</body>
+</html>
+

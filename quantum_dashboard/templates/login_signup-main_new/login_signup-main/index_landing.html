@@ -1,0 +1,2332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IBM Quantum Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * { font-family: 'Inter', sans-serif; }
+        
+        :root {
+            /* Dark theme (default) */
+            --bg-primary: linear-gradient(135deg, #0f0f23, #1a1a3e 50%, #2d1b69);
+            --bg-card: rgba(0, 0, 0, 0.3);
+            --bg-modal: rgba(15, 15, 35, 0.95);
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --border-color: rgba(59, 130, 246, 0.2);
+            --chart-bg: rgba(15, 15, 35, 0.8);
+            --chart-paper: rgba(15, 15, 35, 0.9);
+            --table-bg: rgba(0, 0, 0, 0.2);
+            --table-hover: rgba(59, 130, 246, 0.1);
+        }
+
+        [data-theme="light"] {
+            /* Light theme */
+            --bg-primary: linear-gradient(135deg, #f8fafc, #e2e8f0 50%, #cbd5e1);
+            --bg-card: rgba(255, 255, 255, 0.8);
+            --bg-modal: rgba(255, 255, 255, 0.95);
+            --text-primary: #1f2937;
+            --text-secondary: #4b5563;
+            --text-muted: #6b7280;
+            --border-color: rgba(59, 130, 246, 0.3);
+            --chart-bg: rgba(255, 255, 255, 0.9);
+            --chart-paper: rgba(248, 250, 252, 0.95);
+            --table-bg: rgba(255, 255, 255, 0.3);
+            --table-hover: rgba(59, 130, 246, 0.05);
+        }
+
+        body { 
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .quantum-glow { 
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); 
+            border: 1px solid var(--border-color); 
+        }
+        header {
+  /* Use CSS variables for background and border */
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+        
+        .card-shadow { box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .hover-lift { transition: transform 0.2s; }
+        .hover-lift:hover { transform: translateY(-2px); }
+        
+        .bg-card { background: var(--bg-card); }
+        .bg-modal { background: var(--bg-modal); }
+        .text-primary { color: var(--text-primary); }
+        .text-secondary { color: var(--text-secondary); }
+        .text-muted { color: var(--text-muted); }
+        
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #3b82f6;
+            border-radius: 50%;
+            animation: float 6s infinite linear;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10%, 90% { opacity: 1; }
+            100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+        }
+        
+        .status-running { background: linear-gradient(45deg, #10b981, #34d399); }
+        .status-completed { background: linear-gradient(45deg, #3b82f6, #60a5fa); }
+        .status-queued { background: linear-gradient(45deg, #f59e0b, #fbbf24); }
+        .status-error { background: linear-gradient(45deg, #ef4444, #f87171); }
+        
+        .circuit-line {
+            stroke: #3b82f6;
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 5, 5;
+            animation: dash 2s linear infinite;
+        }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: -10; }
+        }
+        
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+        
+        /* Circuit Builder Styles */
+        .circuit-grid {
+            display: grid;
+            grid-template-columns: 60px repeat(12, 1fr);
+            gap: 8px;
+            background: var(--bg-card);
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            min-height: 300px;
+        }
+        
+        .qubit-label {
+            background: #3b82f6;
+            color: white;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .gate-slot {
+            width: 60px;
+            height: 60px;
+            border: 2px dashed rgba(203, 213, 225, 0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .gate-slot:hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .gate-slot.drag-over {
+            border-color: #3b82f6 !important;
+            background: rgba(59, 130, 246, 0.1) !important;
+        }
+        
+        .gate-slot.occupied {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .gate {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: move;
+            transition: all 0.2s ease;
+            color: white;
+        }
+        
+        .gate:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .gate-H { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .gate-X { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .gate-Y { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .gate-Z { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        .gate-S { background: linear-gradient(135deg, #10b981, #059669); }
+        .gate-T { background: linear-gradient(135deg, #f97316, #ea580c); }
+        .gate-CNOT { background: linear-gradient(135deg, #ec4899, #db2777); }
+        .gate-CZ { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+        .gate-RX { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+        .gate-RY { background: linear-gradient(135deg, #84cc16, #65a30d); }
+        .gate-RZ { background: linear-gradient(135deg, #a855f7, #9333ea); }
+        
+        .gate-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 12px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .palette-gate {
+            width: 70px;
+            height: 70px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            color: white;
+        }
+        
+        .palette-gate:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .palette-gate:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: var(--bg-modal);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 95vw;
+            max-height: 95vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        
+        .measurement-row.hidden {
+            display: none;
+        }
+        
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Notification System */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 400px;
+        }
+
+        .notification {
+            background: var(--bg-modal);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            min-width: 320px;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .notification.hide {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        .notification-icon {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .notification-success .notification-icon {
+            background: linear-gradient(135deg, #10b981, #34d399);
+        }
+
+        .notification-error .notification-icon {
+            background: linear-gradient(135deg, #ef4444, #f87171);
+        }
+
+        .notification-info .notification-icon {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+        }
+
+        .notification-warning .notification-icon {
+            background: linear-gradient(135deg, #f59e0b, #fbbf24);
+        }
+
+        .notification-content {
+            flex: 1;
+        }
+
+        .notification-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .notification-message {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .notification-close {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .notification-close:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: var(--text-primary);
+        }
+
+        .notification-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border-radius: 0 0 12px 12px;
+            transition: width linear;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white overflow-x-hidden">
+    <div id="particles" class="fixed inset-0 pointer-events-none"></div>
+    
+    <!-- Notification Container -->
+    <div id="notificationContainer" class="notification-container"></div>
+    
+    <!-- Header -->
+
+<header class="backdrop-blur-lg border-b">
+
+
+
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2L2 7v10c0 5.55 3.84 9.74 9 11 5.16-1.26 9-5.45 9-11V7l-10-5z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">IBM Quantum Dashboard</h1>
+                    <p class="text-sm text-gray-400">Real-time Quantum Computing Jobs</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 text-sm">
+                    <div class="w-2 h-2 bg-green-400 rounded-full pulse"></div>
+                    <span class="text-green-400">Live</span>
+                </div>
+                <button id="themeToggle" class="p-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg transition-all quantum-glow" title="Toggle theme">
+                    <svg id="themeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                </button>
+                <button id="circuitBuilderBtn" class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded-lg transition-all quantum-glow flex items-center space-x-2">
+                    <span> ➕ Create Job</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Total Jobs</p>
+                        <p class="text-3xl font-bold text-primary" id="totalJobs">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Running</p>
+                        <p class="text-3xl font-bold text-green-400" id="runningJobs">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <div class="w-3 h-3 bg-green-400 rounded-full pulse"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Queued</p>
+                        <p class="text-3xl font-bold text-yellow-400" id="queuedJobs">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-secondary text-sm">Success Rate</p>
+                        <p class="text-3xl font-bold text-purple-400" id="successRate">0%</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Charts -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow">
+                <h3 class="text-lg font-semibold mb-4 text-primary">Backend Usage</h3>
+                <div id="backendChart" class="h-48"></div>
+            </div>
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow">
+                <h3 class="text-lg font-semibold mb-4 text-primary">Job Types</h3>
+                <div id="jobTypeChart" class="h-48"></div>
+            </div>
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow">
+                <h3 class="text-lg font-semibold mb-4 text-primary">Status Distribution</h3>
+                <div id="statusChart" class="h-48"></div>
+            </div>
+        </div>
+
+        <!-- Jobs Table -->
+        <div class="mt-8 bg-card backdrop-blur-lg rounded-xl quantum-glow overflow-hidden">
+            <div class="px-6 py-4 border-b border-blue-500/20 [data-theme='light']_&:border-gray-200">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <h2 class="text-xl font-semibold text-primary">Quantum Jobs</h2>
+                    
+                    <!-- Search and Filter Controls -->
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <!-- Search Input -->
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+                            <input id="jobSearch" type="text" placeholder="Search jobs..." class="pl-10 pr-4 py-2 bg-black/20 border border-blue-500/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-64 text-primary placeholder-gray-400 [data-theme='light']_&:bg-white [data-theme='light']_&:border-gray-300">
+                        </div>
+                        
+                        <!-- Status Filter -->
+                        <select id="statusFilter" class="px-3 py-2 bg-black/20 border border-blue-500/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-primary [data-theme='light']_&:bg-white [data-theme='light']_&:border-gray-300">
+                            <option value="">All Status</option>
+                            <option value="Queued">Queued</option>
+                            <option value="Running">Running</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Error">Error</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                        
+                        <!-- Job Type Filter -->
+                        <select id="jobTypeFilter" class="px-3 py-2 bg-black/20 border border-blue-500/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-primary [data-theme='light']_&:bg-white [data-theme='light']_&:border-gray-300">
+                            <option value="">All Types</option>
+                        </select>
+                        
+                        <!-- Backend Filter -->
+                        <select id="backendFilter" class="px-3 py-2 bg-black/20 border border-blue-500/30 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-primary [data-theme='light']_&:bg-white [data-theme='light']_&:border-gray-300">
+                            <option value="">All Backends</option>
+                        </select>
+                        
+                        <!-- Clear Filters Button -->
+                        <button id="clearFilters" class="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 rounded-lg transition-colors flex items-center space-x-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            <span>Clear</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Results Summary -->
+                <div id="filterSummary" class="mt-3 text-sm text-gray-400" style="display: none;">
+                    <span id="filteredCount">0</span> of <span id="totalCount">0</span> jobs shown
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-table">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Job ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Backend</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Qubits</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Shots</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Created</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Duration</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobsTable" class="bg-table divide-y divide-blue-500/20">
+                        <!-- Jobs will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Circuit Builder Modal -->
+    <div id="circuitBuilderModal" class="modal" style="display: none;">
+        <div class="modal-content" style="width: 95vw; max-width: 1400px;">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 gradient-bg rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-white drop-shadow-[0_0_2px_black]">
+  Quantum Circuit Builder
+</h2>
+
+                        <p class="text-gray-600">Design your quantum circuit by dragging gates</p>
+                    </div>
+                </div>
+                <button id="closeCircuitBuilder" class="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Circuit Controls -->
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 mb-6 quantum-glow">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm font-medium text-primary">Qubits:</label>
+                        <input id="circuitQubits" type="number" min="1" max="8" value="3" class="w-20 px-3 py-2 bg-black/20 border border-blue-500/30 rounded-lg text-sm text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm font-medium text-primary">Shots:</label>
+                        <input id="circuitShots" type="number" min="1" value="1024" class="w-24 px-3 py-2 bg-black/20 border border-blue-500/30 rounded-lg text-sm text-primary placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm font-medium text-primary">Backend:</label>
+                        <select id="circuitBackend" class="px-3 py-2 bg-black/20 border border-blue-500/30 rounded-lg text-sm text-primary focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option>Loading...</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-2 ml-auto">
+                        <button id="clearCircuit" class="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors">
+                            Clear Circuit
+                        </button>
+                        <button id="runCircuit" class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors quantum-glow">
+                            Run Circuit
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gate Palette -->
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 mb-6 quantum-glow">
+                <h3 class="text-lg font-semibold text-primary mb-4">Gate Palette</h3>
+                <div class="gate-palette">
+                    <div class="palette-gate gate-H" draggable="true" data-gate="H" title="Hadamard Gate">H</div>
+                    <div class="palette-gate gate-X" draggable="true" data-gate="X" title="Pauli-X Gate">X</div>
+                    <div class="palette-gate gate-Y" draggable="true" data-gate="Y" title="Pauli-Y Gate">Y</div>
+                    <div class="palette-gate gate-Z" draggable="true" data-gate="Z" title="Pauli-Z Gate">Z</div>
+                    <div class="palette-gate gate-S" draggable="true" data-gate="S" title="S Gate">S</div>
+                    <div class="palette-gate gate-T" draggable="true" data-gate="T" title="T Gate">T</div>
+                    <div class="palette-gate gate-RX" draggable="true" data-gate="RX" title="Rotation X">RX</div>
+                    <div class="palette-gate gate-RY" draggable="true" data-gate="RY" title="Rotation Y">RY</div>
+                    <div class="palette-gate gate-RZ" draggable="true" data-gate="RZ" title="Rotation Z">RZ</div>
+                    <div class="palette-gate gate-CNOT" draggable="true" data-gate="CNOT" title="CNOT Gate">⊕</div>
+                    <div class="palette-gate gate-CZ" draggable="true" data-gate="CZ" title="Controlled-Z">CZ</div>
+                </div>
+            </div>
+
+            <!-- Circuit Canvas -->
+            <div class="bg-card backdrop-blur-lg rounded-xl p-6 quantum-glow">
+                <h3 class="text-lg font-semibold text-primary mb-4">Circuit Design</h3>
+                <div id="circuitCanvas" class="circuit-grid">
+                    <!-- Circuit will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        let currentCircuitData = { gates: [] };
+        let draggedGate = null;
+        let allJobs = []; // Store all jobs for filtering
+        let filteredJobs = []; // Store filtered jobs
+
+        // WebSocket connection
+        const socket = io(API_BASE);
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('job_update', (data) => {
+            console.log('Job update:', data);
+            loadJobs();
+            updateStats();
+        });
+
+        // Theme management
+        let currentTheme = 'dark';
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('quantum-dashboard-theme') || 'dark';
+            setTheme(savedTheme);
+            
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+        }
+
+        function setTheme(theme) {
+            currentTheme = theme;
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('quantum-dashboard-theme', theme);
+            
+            const themeIcon = document.getElementById('themeIcon');
+            if (theme === 'light') {
+                themeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>`;
+            } else {
+                themeIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>`;
+            }
+            
+            // Update charts with new theme
+            setTimeout(() => {
+                updateCharts();
+            }, 100);
+        }
+
+        function toggleTheme() {
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+
+        // Notification System
+        let notificationId = 0;
+
+        function showNotification(type, title, message, duration = 5000) {
+            const container = document.getElementById('notificationContainer');
+            const id = ++notificationId;
+            
+            const icons = {
+                success: `<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>`,
+                error: `<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>`,
+                info: `<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>`,
+                warning: `<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>`
+            };
+
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <div class="notification-icon">
+                    ${icons[type]}
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">${title}</div>
+                    <div class="notification-message">${message}</div>
+                </div>
+                <button class="notification-close" onclick="hideNotification(${id})">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+                ${duration > 0 ? `<div class="notification-progress" style="width: 100%;"></div>` : ''}
+            `;
+            
+            notification.dataset.id = id;
+            container.appendChild(notification);
+            
+            // Trigger animation
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            // Auto-hide with progress bar
+            if (duration > 0) {
+                const progressBar = notification.querySelector('.notification-progress');
+                if (progressBar) {
+                    progressBar.style.transitionDuration = `${duration}ms`;
+                    setTimeout(() => {
+                        progressBar.style.width = '0%';
+                    }, 50);
+                }
+                
+                setTimeout(() => {
+                    hideNotification(id);
+                }, duration);
+            }
+            
+            return id;
+        }
+
+        function hideNotification(id) {
+            const notification = document.querySelector(`[data-id="${id}"]`);
+            if (notification) {
+                notification.classList.add('hide');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }
+
+        // Initialize the application
+        async function init() {
+            initTheme();
+            createParticles();
+            await loadJobTypes();
+            await loadBackends();
+            await loadJobs();
+            await updateStats();
+            await updateCharts();
+            initCircuitBuilder();
+            setupFilterListeners();
+        }
+
+        // Create floating particles
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 20;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 6 + 's';
+                particle.style.animationDuration = (6 + Math.random() * 4) + 's';
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // Load job types
+        async function loadJobTypes() {
+            try {
+                const response = await fetch(`${API_BASE}/job-types`);
+                let jobTypes = await response.json();
+                
+                // Add fallback job types if API fails or returns empty
+                if (!jobTypes || jobTypes.length === 0) {
+                    jobTypes = [
+                        'Bell State',
+                        'GHZ State',
+                        'Quantum Fourier Transform',
+                        'Grover Search',
+                        'Quantum Teleportation',
+                        'Shor Algorithm',
+                        'VQE Optimization',
+                        'QAOA Circuit',
+                        'Random Circuit',
+                        'Custom Circuit'
+                    ];
+                }
+                
+                const select = document.getElementById('jobType');
+                if (select) {
+                    select.innerHTML = jobTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error loading job types:', error);
+                // Fallback job types
+                const fallbackJobTypes = [
+                    'Bell State',
+                    'GHZ State',
+                    'Quantum Fourier Transform',
+                    'Grover Search',
+                    'Quantum Teleportation',
+                    'Shor Algorithm',
+                    'VQE Optimization',
+                    'QAOA Circuit',
+                    'Random Circuit',
+                    'Custom Circuit'
+                ];
+                const select = document.getElementById('jobType');
+                if (select) {
+                    select.innerHTML = fallbackJobTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+                }
+            }
+        }
+
+        // Load backends
+        async function loadBackends() {
+            try {
+                const response = await fetch(`${API_BASE}/backends`);
+                let backends = await response.json();
+                
+                // Comprehensive list of IBM Quantum backends and simulators
+                const comprehensiveBackends = [
+                    // IBM Quantum Network Processors
+                    'ibm_brisbane',
+                    'ibm_kyoto',
+                    'ibm_osaka',
+                    'ibm_torino',
+                    'ibm_sherbrooke',
+                    'ibm_cusco',
+                    'ibm_peekskill',
+                    'ibm_nazca',
+                    'ibm_fez',
+                    'ibm_cairo',
+                    'ibm_hanoi',
+                    'ibm_kolkata',
+                    'ibm_mumbai',
+                    'ibm_perth',
+                    'ibm_lagos',
+                    'ibm_nairobi',
+                    'ibm_geneva',
+                    'ibm_algiers',
+                    
+                    // Legacy IBM Quantum backends
+                    'ibmq_qasm_simulator',
+                    'ibmq_manila',
+                    'ibmq_belem',
+                    'ibmq_quito',
+                    'ibmq_lima',
+                    'ibmq_bogota',
+                    'ibmq_santiago',
+                    'ibmq_casablanca',
+                    'ibmq_armonk',
+                    'ibmq_athens',
+                    'ibmq_montreal',
+                    'ibmq_toronto',
+                    'ibmq_guadalupe',
+                    
+                    // Qiskit Aer Simulators
+                    'aer_simulator',
+                    'aer_simulator_statevector',
+                    'aer_simulator_density_matrix',
+                    'aer_simulator_stabilizer',
+                    'aer_simulator_matrix_product_state',
+                    'aer_simulator_extended_stabilizer',
+                    'aer_simulator_unitary',
+                    'aer_simulator_superop',
+                    
+                    // Cloud simulators
+                    'simulator_statevector',
+                    'simulator_mps',
+                    'simulator_extended_stabilizer',
+                    'simulator_stabilizer'
+                ];
+                
+                // Use comprehensive list if API returns limited data
+                if (!backends || backends.length < 10) {
+                    backends = comprehensiveBackends;
+                }
+                
+                const select = document.getElementById('backend');
+                const circuitSelect = document.getElementById('circuitBackend');
+                const options = backends.map(backend => `<option value="${backend}">${backend}</option>`).join('');
+                if (select) select.innerHTML = options;
+                if (circuitSelect) circuitSelect.innerHTML = options;
+                
+                //showNotification('info', 'Backends Loaded', `${backends.length} quantum backends available`);
+            } catch (error) {
+                console.error('Error loading backends:', error);
+                showNotification('error', 'Backend Error', 'Failed to load backends, using fallback list');
+                
+                // Fallback backends
+                const fallbackBackends = [
+                    'ibm_brisbane',
+                    'ibm_kyoto',
+                    'ibm_osaka',
+                    'aer_simulator',
+                    'ibmq_qasm_simulator',
+                    'ibmq_manila'
+                ];
+                const select = document.getElementById('backend');
+                const circuitSelect = document.getElementById('circuitBackend');
+                const options = fallbackBackends.map(backend => `<option value="${backend}">${backend}</option>`).join('');
+                if (select) select.innerHTML = options;
+                if (circuitSelect) circuitSelect.innerHTML = options;
+            }
+        }
+
+        // Load jobs
+        async function loadJobs() {
+            try {
+                const response = await fetch(`${API_BASE}/jobs`);
+                const jobs = await response.json();
+                allJobs = jobs;
+                populateFilterOptions();
+                applyFilters();
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+            }
+        }
+
+        // Update statistics
+        async function updateStats() {
+            try {
+                const response = await fetch(`${API_BASE}/jobs`);
+                const jobs = await response.json();
+                
+                const totalJobs = jobs.length;
+                const runningJobs = jobs.filter(job => job.Status === 'Running').length;
+                const queuedJobs = jobs.filter(job => job.Status === 'Queued').length;
+                const completedJobs = jobs.filter(job => job.Status === 'Completed').length;
+                const successRate = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0;
+
+                document.getElementById('totalJobs').textContent = totalJobs;
+                document.getElementById('runningJobs').textContent = runningJobs;
+                document.getElementById('queuedJobs').textContent = queuedJobs;
+                document.getElementById('successRate').textContent = `${successRate}%`;
+            } catch (error) {
+                console.error('Error updating stats:', error);
+            }
+        }
+
+        // Update charts
+        async function updateCharts() {
+            try {
+                const response = await fetch(`${API_BASE}/analytics`);
+                const analytics = await response.json();
+
+                // Get theme colors
+                const isDark = currentTheme === 'dark';
+                const textColor = isDark ? '#ffffff' : '#1f2937';
+                const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+                const paperBg = isDark ? getComputedStyle(document.documentElement).getPropertyValue('--chart-paper').trim() : 'rgba(248, 250, 252, 0.95)';
+
+                // Backend utilization chart
+                const backendData = [{
+                    x: Object.keys(analytics.backend_utilization || {}),
+                    y: Object.values(analytics.backend_utilization || {}),
+                    type: 'bar',
+                    marker: { color: '#3b82f6' }
+                }];
+                Plotly.newPlot('backendChart', backendData, {
+                    margin: { t: 20, l: 40, r: 20, b: 40 },
+                    paper_bgcolor: paperBg,
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: textColor },
+                    xaxis: { color: textColor, gridcolor: gridColor },
+                    yaxis: { color: textColor, gridcolor: gridColor }
+                }, { responsive: true, displayModeBar: false });
+
+                // Job types chart
+                const jobTypeData = [{
+                    labels: Object.keys(analytics.job_type_distribution || {}),
+                    values: Object.values(analytics.job_type_distribution || {}),
+                    type: 'pie',
+                    marker: { colors: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'] }
+                }];
+                Plotly.newPlot('jobTypeChart', jobTypeData, {
+                    margin: { t: 20, l: 20, r: 20, b: 20 },
+                    paper_bgcolor: paperBg,
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: textColor },
+                    showlegend: false
+                }, { responsive: true, displayModeBar: false });
+
+                // Status distribution chart
+                const statusData = [{
+                    x: Object.keys(analytics.status_distribution || {}),
+                    y: Object.values(analytics.status_distribution || {}),
+                    type: 'bar',
+                    marker: { color: ['#f59e0b', '#10b981', '#3b82f6', '#ef4444'] }
+                }];
+                Plotly.newPlot('statusChart', statusData, {
+                    margin: { t: 20, l: 40, r: 20, b: 40 },
+                    paper_bgcolor: paperBg,
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: textColor },
+                    xaxis: { color: textColor, gridcolor: gridColor },
+                    yaxis: { color: textColor, gridcolor: gridColor }
+                }, { responsive: true, displayModeBar: false });
+
+            } catch (error) {
+                console.error('Error updating charts:', error);
+            }
+        }
+
+        // Render jobs table
+        function renderJobsTable(jobs) {
+            const tbody = document.getElementById('jobsTable');
+            tbody.innerHTML = '';
+
+            jobs.forEach(job => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-table-hover transition-colors';
+                
+                const statusColors = {
+                    'Queued': 'status-queued text-black',
+                    'Running': 'status-running text-white',
+                    'Completed': 'status-completed text-white',
+                    'Error': 'status-error text-white',
+                    'Cancelled': 'bg-gray-500 text-white'
+                };
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary">${job['Job ID']}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[job.Status] || 'bg-gray-500 text-white'}">
+                            ${job.Status}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">${job['Job Type']}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">${job.Backend}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">${job.Qubits}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">${job.Shots}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">${formatDate(job.Created)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary">${job.Duration ? `${job.Duration.toFixed(2)}s` : '--'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="toggleJobDetails('${job['Job ID']}')" class="text-blue-400 hover:text-blue-300 transition-colors">View</button>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+
+                // Add details row
+                const detailsRow = document.createElement('tr');
+                detailsRow.id = `details_${job['Job ID']}`;
+                detailsRow.style.display = 'none';
+                detailsRow.innerHTML = `
+                    <td colspan="9" class="px-6 py-4 bg-table border-t border-blue-500/20">
+                        <div class="space-y-4">
+                            <div id="jobDetails_${job['Job ID']}" class="w-full text-secondary">Loading...</div>
+                            <div id="jobActions_${job['Job ID']}" class="flex justify-center space-x-4">
+                                ${job.Status === 'Queued' ? `<button onclick="runJob('${job['Job ID']}')" class="px-6 py-2 bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-colors quantum-glow">Run Job</button>` : ''}
+                                ${job.Status === 'Queued' || job.Status === 'Running' ? `<button onclick="cancelJob('${job['Job ID']}')" class="px-6 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors">Cancel Job</button>` : ''}
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(detailsRow);
+            });
+        }
+
+        // Format date
+        function formatDate(dateString) {
+            if (!dateString) return '--';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        // Populate filter options
+        function populateFilterOptions() {
+            if (allJobs.length === 0) return;
+
+            // Populate job type filter
+            const jobTypes = [...new Set(allJobs.map(job => job['Job Type']))];
+            const jobTypeFilter = document.getElementById('jobTypeFilter');
+            const currentJobType = jobTypeFilter.value;
+            jobTypeFilter.innerHTML = '<option value="">All Types</option>' + 
+                jobTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+            jobTypeFilter.value = currentJobType;
+
+            // Populate backend filter
+            const backends = [...new Set(allJobs.map(job => job.Backend))];
+            const backendFilter = document.getElementById('backendFilter');
+            const currentBackend = backendFilter.value;
+            backendFilter.innerHTML = '<option value="">All Backends</option>' + 
+                backends.map(backend => `<option value="${backend}">${backend}</option>`).join('');
+            backendFilter.value = currentBackend;
+        }
+
+        // Apply filters and search
+        function applyFilters() {
+            const searchTerm = document.getElementById('jobSearch').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const jobTypeFilter = document.getElementById('jobTypeFilter').value;
+            const backendFilter = document.getElementById('backendFilter').value;
+
+            filteredJobs = allJobs.filter(job => {
+                // Search filter
+                const searchMatch = !searchTerm || 
+                    job['Job ID'].toLowerCase().includes(searchTerm) ||
+                    job.Status.toLowerCase().includes(searchTerm) ||
+                    job['Job Type'].toLowerCase().includes(searchTerm) ||
+                    job.Backend.toLowerCase().includes(searchTerm);
+
+                // Status filter
+                const statusMatch = !statusFilter || job.Status === statusFilter;
+
+                // Job type filter
+                const jobTypeMatch = !jobTypeFilter || job['Job Type'] === jobTypeFilter;
+
+                // Backend filter
+                const backendMatch = !backendFilter || job.Backend === backendFilter;
+
+                return searchMatch && statusMatch && jobTypeMatch && backendMatch;
+            });
+
+            renderJobsTable(filteredJobs);
+            updateFilterSummary();
+        }
+
+        // Update filter summary
+        function updateFilterSummary() {
+            const summary = document.getElementById('filterSummary');
+            const filteredCount = document.getElementById('filteredCount');
+            const totalCount = document.getElementById('totalCount');
+            
+            filteredCount.textContent = filteredJobs.length;
+            totalCount.textContent = allJobs.length;
+            
+            // Show summary if filters are active
+            const hasActiveFilters = 
+                document.getElementById('jobSearch').value ||
+                document.getElementById('statusFilter').value ||
+                document.getElementById('jobTypeFilter').value ||
+                document.getElementById('backendFilter').value;
+            
+            summary.style.display = hasActiveFilters ? 'block' : 'none';
+        }
+
+        // Clear all filters
+        function clearAllFilters() {
+            document.getElementById('jobSearch').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('jobTypeFilter').value = '';
+            document.getElementById('backendFilter').value = '';
+            applyFilters();
+        }
+
+        // Setup filter event listeners
+        function setupFilterListeners() {
+            document.getElementById('jobSearch').addEventListener('input', applyFilters);
+            document.getElementById('statusFilter').addEventListener('change', applyFilters);
+            document.getElementById('jobTypeFilter').addEventListener('change', applyFilters);
+            document.getElementById('backendFilter').addEventListener('change', applyFilters);
+            document.getElementById('clearFilters').addEventListener('click', clearAllFilters);
+        }
+
+        // Toggle job details
+        async function toggleJobDetails(jobId) {
+            const detailsRow = document.getElementById(`details_${jobId}`);
+            const detailsDiv = document.getElementById(`jobDetails_${jobId}`);
+            
+            if (detailsRow.style.display === 'table-row') {
+                detailsRow.style.display = 'none';
+                return;
+            }
+
+            detailsRow.style.display = 'table-row';
+            
+            try {
+                const response = await fetch(`${API_BASE}/jobs/${jobId}`);
+                const job = await response.json();
+                
+                if (job.Status === 'Completed' && job.Result) {
+                    renderJobResults(detailsDiv, job);
+                } else {
+                    let statusInfo = '';
+                    
+                    if (job.Status === 'Queued') {
+                        statusInfo = `
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <h4 class="font-semibold text-yellow-800">Job Queued</h4>
+                                </div>
+                                <p class="text-yellow-700 text-sm">Queue Position: ${job['Queue Position'] || 'Unknown'}</p>
+                                <p class="text-yellow-700 text-sm">Estimated Wait Time: ${job['Estimated Wait'] || 'Calculating...'}</p>
+                                <p class="text-yellow-700 text-sm">Backend: ${job.Backend}</p>
+                            </div>
+                        `;
+                    } else if (job.Status === 'Cancelled') {
+                        statusInfo = `
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    <h4 class="font-semibold text-gray-800">Job Cancelled</h4>
+                                </div>
+                                <p class="text-gray-700 text-sm">Cancelled at: ${job['Cancelled At'] || job.Created}</p>
+                                <p class="text-gray-700 text-sm">Reason: ${job['Cancel Reason'] || 'User requested'}</p>
+                                <p class="text-gray-700 text-sm">Runtime before cancellation: ${job.Duration ? `${job.Duration.toFixed(2)}s` : '< 1s'}</p>
+                            </div>
+                        `;
+                    } else if (job.Status === 'Running') {
+                        statusInfo = `
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <div class="w-3 h-3 bg-green-400 rounded-full pulse"></div>
+                                    <h4 class="font-semibold text-green-800">Job Running</h4>
+                                </div>
+                                <p class="text-green-700 text-sm">Started: ${job['Started At'] || job.Created}</p>
+                                <p class="text-green-700 text-sm">Runtime: ${job.Duration ? `${job.Duration.toFixed(2)}s` : 'Just started'}</p>
+                                <p class="text-green-700 text-sm">Progress: ${job.Progress || 'Processing...'}</p>
+                            </div>
+                        `;
+                    } else if (job.Status === 'Error') {
+                        statusInfo = `
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    <h4 class="font-semibold text-red-800">Job Failed</h4>
+                                </div>
+                                <p class="text-red-700 text-sm">Error: ${job.Error || 'Unknown error occurred'}</p>
+                                <p class="text-red-700 text-sm">Failed at: ${job['Failed At'] || job.Created}</p>
+                                <p class="text-red-700 text-sm">Runtime before failure: ${job.Duration ? `${job.Duration.toFixed(2)}s` : '< 1s'}</p>
+                            </div>
+                        `;
+                    }
+                    
+                    detailsDiv.innerHTML = `
+                        <div class="py-4">
+                            ${statusInfo}
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                    <span class="font-medium text-gray-600">Job Type:</span>
+                                    <p class="text-gray-800">${job['Job Type']}</p>
+                                </div>
+                                <div>
+                                    <span class="font-medium text-gray-600">Qubits:</span>
+                                    <p class="text-gray-800">${job.Qubits}</p>
+                                </div>
+                                <div>
+                                    <span class="font-medium text-gray-600">Shots:</span>
+                                    <p class="text-gray-800">${job.Shots.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <span class="font-medium text-gray-600">Created:</span>
+                                    <p class="text-gray-800">${formatDate(job.Created)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                detailsDiv.innerHTML = `<div class="text-red-600">Error loading job details: ${error.message}</div>`;
+            }
+        }
+
+        // Render job results with circuit visualization, histogram and collapsible table
+        function renderJobResults(container, job) {
+            const counts = job.Result.counts;
+            const states = Object.keys(counts);
+            const values = Object.values(counts);
+            const totalShots = values.reduce((a, b) => a + b, 0);
+
+            // Generate quantum-themed colors for each state
+            const quantumColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+            const colors = states.map((_, index) => quantumColors[index % quantumColors.length]);
+
+            const isDark = currentTheme === 'dark';
+            const bgColor = isDark ? 'bg-card' : 'bg-white';
+            const textColor = isDark ? 'text-primary' : 'text-gray-800';
+            const headerBg = isDark ? 'bg-table' : 'bg-gray-50';
+            const borderColor = isDark ? 'border-blue-500/20' : 'border-gray-200';
+
+ container.innerHTML = `
+    <div class="space-y-6">
+        <!-- Results Grid (1st row) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-lg font-semibold mb-4 ${textColor}">Measurement Results</h4>
+                <div id="histogram_${job['Job ID']}" class="h-64 ${bgColor} rounded-lg border ${borderColor}"></div>
+            </div>
+            <div>
+                <h4 class="text-lg font-semibold mb-4 ${textColor}">State Probabilities</h4>
+                <div class="${bgColor} rounded-lg border ${borderColor} overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead class="${headerBg}">
+                            <tr>
+                                <th class="px-4 py-2 text-left ${textColor}">State</th>
+                                <th class="px-4 py-2 text-left ${textColor}">Count</th>
+                                <th class="px-4 py-2 text-left ${textColor}">Probability</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statesTable_${job['Job ID']}"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Circuit Visualization (2nd row) -->
+        <div class="${bgColor} rounded-lg border ${borderColor} p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-lg font-semibold ${textColor}">Quantum Circuit</h4>
+                <div class="flex space-x-2">
+                    <button onclick="downloadCircuitSVG('${job['Job ID']}')" class="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-400 rounded text-sm transition-colors">
+                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Download SVG
+                    </button>
+                    <button onclick="toggleCircuitAnimation('${job['Job ID']}')" class="px-3 py-1 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 rounded text-sm transition-colors">
+                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m6-10V7a3 3 0 11-6 0V4"></path>
+                        </svg>
+                        Animate
+                    </button>
+                </div>
+            </div>
+            <div id="circuitVisualization_${job['Job ID']}" class="overflow-x-auto">
+                <!-- Circuit will be rendered here -->
+            </div>
+            <div class="mt-4 text-sm ${textColor} opacity-75">
+                <div class="flex flex-wrap gap-4">
+                    <span><strong>Depth:</strong> <span id="circuitDepth_${job['Job ID']}">-</span></span>
+                    <span><strong>Gates:</strong> <span id="circuitGates_${job['Job ID']}">-</span></span>
+                    <span><strong>Qubits:</strong> ${job.Qubits}</span>
+                    <span><strong>Backend:</strong> ${job.Backend}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+`;
+
+
+            // Use setTimeout to ensure the container is rendered before plotting
+            setTimeout(() => {
+                // Render circuit visualization
+                renderJobCircuitVisualization(job);
+                
+                // Render colorful histogram
+                const histogramData = [{
+                    x: states.map(state => `|${state}⟩`),
+                    y: values,
+                    type: 'bar',
+                    marker: { 
+                        color: colors,
+                        line: { color: 'rgba(0, 0, 0, 0.2)', width: 1 }
+                    },
+                    text: states.map(state => `|${state}⟩`),
+                    textposition: 'outside'
+                }];
+
+                Plotly.newPlot(`histogram_${job['Job ID']}`, histogramData, {
+                    margin: { t: 40, l: 60, r: 40, b: 80 },
+                    paper_bgcolor: '#f8fafc',
+                    plot_bgcolor: '#ffffff',
+                    xaxis: { 
+                        title: "Quantum States",
+                        tickangle: -45,
+                        color: '#374151'
+                    },
+                    yaxis: { 
+                        title: "Measurement Counts",
+                        color: '#374151'
+                    },
+                    title: { 
+                        text: 'Quantum Measurement Results', 
+                        font: { size: 16, color: '#1f2937' } 
+                    }
+                }, { responsive: true, displayModeBar: false });
+                
+
+            }, 100);
+
+            // Render states table
+            const statesTable = document.getElementById(`statesTable_${job['Job ID']}`);
+            const sortedStates = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            const showLimit = 6;
+            const shouldCollapse = sortedStates.length > showLimit;
+
+            sortedStates.forEach(([state, count], index) => {
+                const probability = ((count / totalShots) * 100).toFixed(2);
+                const stateColor = colors[states.indexOf(state)];
+                
+                const row = document.createElement('tr');
+                row.className = `measurement-row ${index >= showLimit && shouldCollapse ? 'hidden' : ''} `;
+                row.innerHTML = `
+<td class="px-4 py-2">
+  <div class="flex items-center space-x-2">
+    <!-- Colored square -->
+    <div class="w-4 h-4 rounded" style="background-color: ${stateColor}"></div>
+    
+    <!-- White text with black outline -->
+    <span class="font-mono text-white drop-shadow-[0_0_2px_black]">|${state}⟩</span>
+  </div>
+</td>
+
+
+
+
+                    <td class="px-4 py-2 font-semibold text-white drop-shadow-[0_0_5px_black]">
+  ${count.toLocaleString()}
+</td>
+<td class="px-4 py-2">
+  <div class="flex items-center space-x-2">
+    <!-- Match count cell style -->
+    <span class="font-semibold text-white drop-shadow-[0_0_2px_black]">
+      ${probability}%
+    </span>
+
+    <!-- Progress bar -->
+    <div class="w-16 bg-gray-200 rounded-full h-2">
+      <div class="h-2 rounded-full transition-all duration-500" 
+           style="width: ${(count/Math.max(...values))*100}%; background-color: ${stateColor}"></div>
+    </div>
+  </div>
+</td>
+
+
+
+                `;
+                statesTable.appendChild(row);
+            });
+
+            // Add expand/collapse button if needed
+            if (shouldCollapse) {
+                const expandRow = document.createElement('tr');
+                expandRow.innerHTML = `
+                    <td colspan="3" class="px-4 py-2 text-center border-t">
+                        <button class="expand-btn px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-sm font-medium transition-all">
+                            <svg class="w-4 h-4 inline mr-2 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                            Show ${sortedStates.length - showLimit} more states
+                        </button>
+                    </td>
+                `;
+                statesTable.appendChild(expandRow);
+
+                const expandBtn = expandRow.querySelector('.expand-btn');
+                let isExpanded = false;
+
+                expandBtn.addEventListener('click', () => {
+                    const hiddenRows = statesTable.querySelectorAll('.measurement-row.hidden');
+                    
+                    if (!isExpanded) {
+                        hiddenRows.forEach((row, index) => {
+                            setTimeout(() => {
+                                row.classList.remove('hidden');
+                                row.classList.add('slide-in');
+                            }, index * 50);
+                        });
+                        expandBtn.innerHTML = `
+                            <svg class="w-4 h-4 inline mr-2 expand-icon rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                            Show fewer states
+                        `;
+                        isExpanded = true;
+                    } else {
+                        const allRows = statesTable.querySelectorAll('.measurement-row');
+                        allRows.forEach((row, index) => {
+                            if (index >= showLimit) {
+                                row.classList.add('hidden');
+                                row.classList.remove('slide-in');
+                            }
+                        });
+                        expandBtn.innerHTML = `
+                            <svg class="w-4 h-4 inline mr-2 expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                            Show ${sortedStates.length - showLimit} more states
+                        `;
+                        isExpanded = false;
+                    }
+                });
+            }
+        }
+
+        // Create job
+        async function createJob() {
+            const jobType = document.getElementById('jobType').value;
+            const backend = document.getElementById('backend').value;
+            const qubits = parseInt(document.getElementById('qubits').value);
+            const shots = parseInt(document.getElementById('shots').value);
+
+            try {
+                const response = await fetch(`${API_BASE}/jobs/new`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_type: jobType, backend, qubits, shots })
+                });
+
+                if (response.ok) {
+                    await loadJobs();
+                    await updateStats();
+                    await updateCharts();
+                } else {
+                    const error = await response.json();
+                    alert('Error creating job: ' + error.error);
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
+            }
+        }
+
+        // Run job
+        async function runJob(jobId) {
+            try {
+                const response = await fetch(`${API_BASE}/jobs/run/${jobId}`, { method: 'POST' });
+                if (response.ok) {
+                    showNotification('success', 'Job Started', `Job ${jobId} is now running`);
+                    await loadJobs();
+                    await updateStats();
+                } else {
+                    const error = await response.json();
+                    showNotification('error', 'Job Start Failed', error.error || 'Failed to start job');
+                }
+            } catch (error) {
+                showNotification('error', 'Network Error', 'Failed to communicate with server');
+            }
+        }
+
+        // Cancel job
+        async function cancelJob(jobId) {
+            try {
+                const response = await fetch(`${API_BASE}/jobs/cancel/${jobId}`, { method: 'POST' });
+                if (response.ok) {
+                    showNotification('warning', 'Job Cancelled', `Job ${jobId} has been cancelled`);
+                    await loadJobs();
+                    await updateStats();
+                } else {
+                    const error = await response.json();
+                    showNotification('error', 'Cancel Failed', error.error || 'Failed to cancel job');
+                }
+            } catch (error) {
+                showNotification('error', 'Network Error', 'Failed to communicate with server');
+            }
+        }
+
+        // Circuit Builder Functions
+        function initCircuitBuilder() {
+            const modal = document.getElementById('circuitBuilderModal');
+            const openBtn = document.getElementById('circuitBuilderBtn');
+            const closeBtn = document.getElementById('closeCircuitBuilder');
+            
+            openBtn.addEventListener('click', () => {
+                modal.style.display = 'flex';
+                renderCircuitCanvas();
+            });
+            
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+            
+            document.getElementById('circuitQubits').addEventListener('change', renderCircuitCanvas);
+            document.getElementById('clearCircuit').addEventListener('click', clearCircuit);
+            document.getElementById('runCircuit').addEventListener('click', runCustomCircuit);
+            
+            setupDragAndDrop();
+        }
+
+        function renderCircuitCanvas() {
+            const canvas = document.getElementById('circuitCanvas');
+            const qubits = parseInt(document.getElementById('circuitQubits').value) || 3;
+            const maxSteps = 12;
+            
+            canvas.innerHTML = '';
+            canvas.style.gridTemplateColumns = `60px repeat(${maxSteps}, 1fr)`;
+            
+            for (let q = 0; q < qubits; q++) {
+                // Qubit label
+                const label = document.createElement('div');
+                label.className = 'qubit-label';
+                label.textContent = `q${q}`;
+                canvas.appendChild(label);
+                
+                // Gate slots
+                for (let step = 0; step < maxSteps; step++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'gate-slot';
+                    slot.dataset.qubit = q;
+                    slot.dataset.step = step;
+                    canvas.appendChild(slot);
+                }
+            }
+            
+            renderExistingGates();
+        }
+
+        function renderExistingGates() {
+            currentCircuitData.gates.forEach(gate => {
+                const slot = document.querySelector(`[data-qubit="${gate.target}"][data-step="${gate.step}"]`);
+                if (slot) {
+                    const gateEl = createGateElement(gate.type, gate);
+                    slot.appendChild(gateEl);
+                    slot.classList.add('occupied');
+                }
+            });
+        }
+
+        function createGateElement(gateType, gateData = {}) {
+            const gate = document.createElement('div');
+            gate.className = `gate gate-${gateType}`;
+            gate.dataset.gateType = gateType;
+            
+            if (gateType === 'CNOT') {
+                gate.textContent = '⊕';
+            } else if (gateType.startsWith('R')) {
+                gate.textContent = gateType;
+                gate.title = `${gateType}(${gateData.angle || 'π/2'})`;
+            } else {
+                gate.textContent = gateType;
+            }
+            
+            gate.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeGateFromCircuit(gate);
+            });
+            
+            return gate;
+        }
+
+        function setupDragAndDrop() {
+            document.querySelectorAll('.palette-gate').forEach(gate => {
+                gate.addEventListener('dragstart', (e) => {
+                    draggedGate = e.target.dataset.gate;
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+            });
+            
+            document.addEventListener('dragover', (e) => {
+                if (e.target.classList.contains('gate-slot') && !e.target.classList.contains('occupied')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                    e.target.classList.add('drag-over');
+                }
+            });
+            
+            document.addEventListener('dragleave', (e) => {
+                if (e.target.classList.contains('gate-slot')) {
+                    e.target.classList.remove('drag-over');
+                }
+            });
+            
+            document.addEventListener('drop', (e) => {
+                if (e.target.classList.contains('gate-slot') && !e.target.classList.contains('occupied') && draggedGate) {
+                    e.preventDefault();
+                    addGateToCircuit(draggedGate, e.target);
+                    e.target.classList.remove('drag-over');
+                    draggedGate = null;
+                }
+            });
+        }
+
+        function addGateToCircuit(gateType, slot) {
+            const qubit = parseInt(slot.dataset.qubit);
+            const step = parseInt(slot.dataset.step);
+            
+            let gateData = {
+                type: gateType,
+                target: qubit,
+                step: step
+            };
+            
+            if (gateType.startsWith('R')) {
+                const angle = prompt(`Enter angle for ${gateType} gate (in radians):`, 'π/2');
+                if (angle === null) return;
+                
+                try {
+                    let angleValue;
+                    if (angle.includes('π')) {
+                        angleValue = eval(angle.replace(/π/g, 'Math.PI'));
+                    } else {
+                        angleValue = parseFloat(angle);
+                    }
+                    gateData.angle = angleValue;
+                } catch (e) {
+                    gateData.angle = Math.PI / 2;
+                    showNotification('warning', 'Invalid Angle', 'Using default angle π/2');
+                }
+            }
+            
+            if (gateType === 'CNOT' || gateType === 'CZ') {
+                const qubits = parseInt(document.getElementById('circuitQubits').value);
+                const availableQubits = Array.from({length: qubits}, (_, i) => i).filter(q => q !== qubit);
+                
+                if (availableQubits.length === 0) {
+                    showNotification('error', 'Gate Error', 'Need at least 2 qubits for two-qubit gates');
+                    return;
+                }
+                
+                const controlQubit = prompt(`Select control qubit (available: ${availableQubits.join(', ')}):`, availableQubits[0]);
+                if (controlQubit === null) return;
+                
+                const control = parseInt(controlQubit);
+                if (!availableQubits.includes(control)) {
+                    showNotification('error', 'Invalid Control', 'Please select a valid control qubit');
+                    return;
+                }
+                
+                gateData.control = control;
+            }
+            
+            currentCircuitData.gates.push(gateData);
+            
+            const gateEl = createGateElement(gateType, gateData);
+            slot.appendChild(gateEl);
+            slot.classList.add('occupied');
+            
+            showNotification('success', 'Gate Added', `${gateType} gate added to qubit ${qubit}`);
+        }
+
+        function removeGateFromCircuit(gateElement) {
+            const slot = gateElement.parentElement;
+            const qubit = parseInt(slot.dataset.qubit);
+            const step = parseInt(slot.dataset.step);
+            
+            currentCircuitData.gates = currentCircuitData.gates.filter(gate => 
+                !(gate.target === qubit && gate.step === step)
+            );
+            
+            slot.removeChild(gateElement);
+            slot.classList.remove('occupied');
+        }
+
+        function clearCircuit() {
+            currentCircuitData = { gates: [] };
+            renderCircuitCanvas();
+            showNotification('info', 'Circuit Cleared', 'All gates have been removed from the circuit');
+        }
+
+        async function runCustomCircuit() {
+            const qubits = parseInt(document.getElementById('circuitQubits').value) || 3;
+            const shots = parseInt(document.getElementById('circuitShots').value) || 1024;
+            const backend = document.getElementById('circuitBackend').value;
+            
+            if (currentCircuitData.gates.length === 0) {
+                showNotification('warning', 'Empty Circuit', 'Please add some gates to your circuit first!');
+                return;
+            }
+            
+            const btn = document.getElementById('runCircuit');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Creating Job...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/jobs/new`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_type: 'Custom Circuit',
+                        backend: backend,
+                        qubits: qubits,
+                        shots: shots,
+                        circuit_data: currentCircuitData
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    btn.textContent = 'Job Created!';
+                    btn.style.background = '#10B981';
+                    
+                    showNotification('success', 'Circuit Job Created', `Job ${result.job_id} submitted successfully with ${currentCircuitData.gates.length} gates`);
+                    
+                    setTimeout(() => {
+                        document.getElementById('circuitBuilderModal').style.display = 'none';
+                        loadJobs();
+                        updateStats();
+                        updateCharts();
+                        
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    const error = await response.json();
+                    showNotification('error', 'Job Creation Failed', error.error || 'Failed to create circuit job');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            } catch (error) {
+                showNotification('error', 'Network Error', 'Failed to communicate with server');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Render circuit visualization for completed jobs
+        function renderJobCircuitVisualization(job) {
+            const containerId = `circuitVisualization_${job['Job ID']}`;
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            // Generate circuit based on job type or use custom circuit data
+            let circuitData;
+            if (job.circuit_data && job.circuit_data.gates) {
+                circuitData = job.circuit_data;
+            } else {
+                circuitData = generateCircuitFromJobType(job['Job Type'], job.Qubits);
+            }
+
+            if (!circuitData || !circuitData.gates || circuitData.gates.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        <p>Circuit diagram not available for this job type</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const gates = circuitData.gates;
+            const qubits = job.Qubits;
+            const maxStep = Math.max(...gates.map(g => g.step || 0)) + 1;
+            const circuitDepth = maxStep;
+            const gateCount = gates.length;
+
+            // Update circuit stats
+            document.getElementById(`circuitDepth_${job['Job ID']}`).textContent = circuitDepth;
+            document.getElementById(`circuitGates_${job['Job ID']}`).textContent = gateCount;
+
+            // Create enhanced SVG circuit diagram
+            const svgWidth = Math.max(500, maxStep * 90 + 150);
+            const svgHeight = Math.max(250, qubits * 80 + 100);
+            
+            const isDark = currentTheme === 'dark';
+            const lineColor = isDark ? '#9ca3af' : '#374151';
+            const textColor = isDark ? '#f3f4f6' : '#1f2937';
+            const bgColor = isDark ? 'rgba(15, 15, 35, 0.8)' : 'rgba(248, 250, 252, 0.9)';
+
+            let svg = `
+                <svg id="circuit_${job['Job ID']}" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" class="w-full max-w-6xl mx-auto" style="background: ${bgColor}; border-radius: 12px;">
+                    <defs>
+                        <style>
+                            .qubit-line { stroke: ${lineColor}; stroke-width: 2; }
+                            .gate-rect { stroke-width: 2; rx: 8; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+                            .gate-text { fill: white; font-family: 'Inter', sans-serif; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+                            .control-dot { fill: ${lineColor}; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); }
+                            .control-line { stroke: ${lineColor}; stroke-width: 3; }
+                            .qubit-label { fill: ${textColor}; font-family: 'Inter', sans-serif; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+                            .measurement-box { fill: ${isDark ? '#1f2937' : '#f9fafb'}; stroke: ${lineColor}; stroke-width: 2; rx: 4; }
+                            .measurement-text { fill: ${textColor}; font-family: 'Inter', sans-serif; font-weight: 500; text-anchor: middle; dominant-baseline: middle; }
+                            .gate-animation { animation: gateGlow 2s ease-in-out infinite alternate; }
+                            @keyframes gateGlow {
+                                0% { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+                                100% { filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.4)); }
+                            }
+                        </style>
+                    </defs>
+            `;
+            
+            // Draw qubit lines with enhanced styling
+            for (let q = 0; q < qubits; q++) {
+                const y = 70 + q * 80;
+                svg += `<line x1="80" y1="${y}" x2="${svgWidth - 60}" y2="${y}" class="qubit-line"/>`;
+                svg += `<text x="40" y="${y}" class="qubit-label" font-size="16">|q${q}⟩</text>`;
+                
+                // Add measurement box at the end
+                const measureX = svgWidth - 50;
+                svg += `<rect x="${measureX - 15}" y="${y - 15}" width="30" height="30" class="measurement-box"/>`;
+                svg += `<text x="${measureX}" y="${y}" class="measurement-text" font-size="12">M</text>`;
+            }
+            
+            // Draw gates with enhanced styling and animations
+            gates.forEach((gate, index) => {
+                const x = 120 + (gate.step || 0) * 90;
+                const y = 70 + gate.target * 80;
+                const animationDelay = `animation-delay: ${index * 0.2}s;`;
+                
+                if (gate.type === 'CNOT' || gate.type === 'CZ') {
+                    // Two-qubit gates
+                    const controlY = 70 + (gate.control || 0) * 80;
+                    const targetY = y;
+                    
+                    // Control dot with glow effect
+                    svg += `<circle cx="${x}" cy="${controlY}" r="8" class="control-dot gate-animation" style="${animationDelay}"/>`;
+                    
+                    // Control line with gradient
+                    svg += `<line x1="${x}" y1="${Math.min(controlY, targetY)}" x2="${x}" y2="${Math.max(controlY, targetY)}" class="control-line"/>`;
+                    
+                    // Target gate
+                    if (gate.type === 'CNOT') {
+                        svg += `<circle cx="${x}" cy="${targetY}" r="25" fill="white" stroke="${lineColor}" stroke-width="3" class="gate-animation" style="${animationDelay}"/>`;
+                        svg += `<line x1="${x-15}" y1="${targetY}" x2="${x+15}" y2="${targetY}" stroke="${lineColor}" stroke-width="3"/>`;
+                        svg += `<line x1="${x}" y1="${targetY-15}" x2="${x}" y2="${targetY+15}" stroke="${lineColor}" stroke-width="3"/>`;
+                    } else {
+                        svg += `<rect x="${x-25}" y="${targetY-25}" width="50" height="50" fill="#8b5cf6" stroke="#7c3aed" class="gate-rect gate-animation" style="${animationDelay}"/>`;
+                        svg += `<text x="${x}" y="${targetY}" class="gate-text" font-size="16">Z</text>`;
+                    }
+                } else {
+                    // Single-qubit gates with enhanced colors and effects
+                    let gateColor = '#3b82f6';
+                    let strokeColor = '#1d4ed8';
+                    let gateText = gate.type;
+                    
+                    // Enhanced color coding for different gates
+                    switch (gate.type) {
+                        case 'H': gateColor = '#3b82f6'; strokeColor = '#1d4ed8'; break;
+                        case 'X': gateColor = '#ef4444'; strokeColor = '#dc2626'; break;
+                        case 'Y': gateColor = '#f59e0b'; strokeColor = '#d97706'; break;
+                        case 'Z': gateColor = '#8b5cf6'; strokeColor = '#7c3aed'; break;
+                        case 'S': gateColor = '#10b981'; strokeColor = '#059669'; break;
+                        case 'T': gateColor = '#f97316'; strokeColor = '#ea580c'; break;
+                        case 'RX': gateColor = '#14b8a6'; strokeColor = '#0d9488'; gateText = 'RX'; break;
+                        case 'RY': gateColor = '#84cc16'; strokeColor = '#65a30d'; gateText = 'RY'; break;
+                        case 'RZ': gateColor = '#a855f7'; strokeColor = '#9333ea'; gateText = 'RZ'; break;
+                        case 'I': gateColor = '#6b7280'; strokeColor = '#4b5563'; gateText = 'I'; break;
+                    }
+                    
+                    svg += `<rect x="${x-25}" y="${y-25}" width="50" height="50" fill="${gateColor}" stroke="${strokeColor}" class="gate-rect gate-animation" style="${animationDelay}"/>`;
+                    svg += `<text x="${x}" y="${y}" class="gate-text" font-size="16">${gateText}</text>`;
+                    
+                    // Add angle annotation for rotation gates
+                    if (gate.angle !== undefined) {
+                        const angleText = gate.angle === Math.PI/2 ? 'π/2' : 
+                                         gate.angle === Math.PI ? 'π' : 
+                                         gate.angle === Math.PI/4 ? 'π/4' : 
+                                         gate.angle === -Math.PI/2 ? '-π/2' :
+                                         gate.angle.toFixed(2);
+                        svg += `<text x="${x}" y="${y+40}" fill="${textColor}" font-size="11" text-anchor="middle" opacity="0.8">${angleText}</text>`;
+                    }
+                }
+            });
+            
+            // Add circuit title and metadata
+            svg += `<text x="${svgWidth/2}" y="30" class="qubit-label" font-size="18" text-anchor="middle" font-weight="700">${job['Job Type']} Circuit</text>`;
+            svg += `<text x="${svgWidth/2}" y="50" fill="${textColor}" font-size="12" text-anchor="middle" opacity="0.7">${gateCount} gates • Depth ${circuitDepth} • ${job.Shots} shots</text>`;
+            
+            svg += '</svg>';
+            
+            container.innerHTML = svg;
+        }
+
+        // Generate circuit data from job type
+        function generateCircuitFromJobType(jobType, qubits) {
+            const gates = [];
+            let step = 0;
+
+            switch (jobType) {
+                case 'Bell State':
+                    if (qubits >= 2) {
+                        gates.push({ type: 'H', target: 0, step: 0 });
+                        gates.push({ type: 'CNOT', target: 1, control: 0, step: 1 });
+                    }
+                    break;
+
+                case 'GHZ State':
+                    if (qubits >= 3) {
+                        gates.push({ type: 'H', target: 0, step: 0 });
+                        for (let i = 1; i < Math.min(qubits, 4); i++) {
+                            gates.push({ type: 'CNOT', target: i, control: 0, step: i });
+                        }
+                    }
+                    break;
+
+                case 'Quantum Fourier Transform':
+                    for (let i = 0; i < Math.min(qubits, 4); i++) {
+                        gates.push({ type: 'H', target: i, step: step++ });
+                        for (let j = i + 1; j < Math.min(qubits, 4); j++) {
+                            gates.push({ type: 'RZ', target: j, control: i, step: step++, angle: Math.PI / Math.pow(2, j - i) });
+                        }
+                    }
+                    break;
+
+                case 'Grover Search':
+                    // Initialize superposition
+                    for (let i = 0; i < Math.min(qubits, 3); i++) {
+                        gates.push({ type: 'H', target: i, step: 0 });
+                    }
+                    // Oracle (simplified)
+                    gates.push({ type: 'Z', target: 0, step: 1 });
+                    // Diffusion operator (simplified)
+                    for (let i = 0; i < Math.min(qubits, 3); i++) {
+                        gates.push({ type: 'H', target: i, step: 2 });
+                        gates.push({ type: 'X', target: i, step: 3 });
+                    }
+                    if (qubits >= 2) {
+                        gates.push({ type: 'CZ', target: 1, control: 0, step: 4 });
+                    }
+                    for (let i = 0; i < Math.min(qubits, 3); i++) {
+                        gates.push({ type: 'X', target: i, step: 5 });
+                        gates.push({ type: 'H', target: i, step: 6 });
+                    }
+                    break;
+
+                case 'Quantum Teleportation':
+                    if (qubits >= 3) {
+                        // Bell pair preparation
+                        gates.push({ type: 'H', target: 1, step: 0 });
+                        gates.push({ type: 'CNOT', target: 2, control: 1, step: 1 });
+                        // Bell measurement
+                        gates.push({ type: 'CNOT', target: 1, control: 0, step: 2 });
+                        gates.push({ type: 'H', target: 0, step: 3 });
+                    }
+                    break;
+
+                case 'VQE Optimization':
+                    // Ansatz circuit
+                    for (let i = 0; i < Math.min(qubits, 4); i++) {
+                        gates.push({ type: 'RY', target: i, step: 0, angle: Math.PI / 4 });
+                    }
+                    for (let i = 0; i < Math.min(qubits - 1, 3); i++) {
+                        gates.push({ type: 'CNOT', target: i + 1, control: i, step: 1 });
+                    }
+                    for (let i = 0; i < Math.min(qubits, 4); i++) {
+                        gates.push({ type: 'RY', target: i, step: 2, angle: Math.PI / 6 });
+                    }
+                    break;
+
+                case 'QAOA Circuit':
+                    // Problem Hamiltonian
+                    for (let i = 0; i < Math.min(qubits, 4); i++) {
+                        gates.push({ type: 'H', target: i, step: 0 });
+                    }
+                    for (let i = 0; i < Math.min(qubits - 1, 3); i++) {
+                        gates.push({ type: 'RZ', target: i, step: 1, angle: Math.PI / 3 });
+                        gates.push({ type: 'CNOT', target: i + 1, control: i, step: 2 });
+                        gates.push({ type: 'RZ', target: i + 1, step: 3, angle: Math.PI / 3 });
+                        gates.push({ type: 'CNOT', target: i + 1, control: i, step: 4 });
+                    }
+                    // Mixer Hamiltonian
+                    for (let i = 0; i < Math.min(qubits, 4); i++) {
+                        gates.push({ type: 'RX', target: i, step: 5, angle: Math.PI / 4 });
+                    }
+                    break;
+
+                case 'Random Circuit':
+                    const gateTypes = ['H', 'X', 'Y', 'Z', 'S', 'T'];
+                    const numGates = Math.min(qubits * 3, 12);
+                    for (let i = 0; i < numGates; i++) {
+                        const gateType = gateTypes[Math.floor(Math.random() * gateTypes.length)];
+                        const target = Math.floor(Math.random() * qubits);
+                        gates.push({ type: gateType, target: target, step: Math.floor(i / qubits) });
+                    }
+                    break;
+
+                default:
+                    // Default simple circuit
+                    for (let i = 0; i < Math.min(qubits, 3); i++) {
+                        gates.push({ type: 'H', target: i, step: 0 });
+                    }
+                    break;
+            }
+
+            return { gates };
+        }
+
+        // Download circuit as SVG
+        function downloadCircuitSVG(jobId) {
+            const svgElement = document.getElementById(`circuit_${jobId}`);
+            if (!svgElement) {
+                showNotification('error', 'Download Failed', 'Circuit diagram not found');
+                return;
+            }
+
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = svgUrl;
+            downloadLink.download = `quantum_circuit_${jobId}.svg`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(svgUrl);
+            
+            showNotification('success', 'Download Complete', 'Circuit diagram saved as SVG');
+        }
+
+        // Play circuit sequence animation
+        function playCircuitSequence(jobId) {
+            const svgElement = document.getElementById(`circuit_${jobId}`);
+            if (!svgElement) return;
+
+            const gates = svgElement.querySelectorAll('[id^="gate_"]');
+            let delay = 0;
+            
+            // Reset all gates first
+            gates.forEach(gate => {
+                gate.classList.remove('gate-sequence', 'gate-pulse');
+            });
+            
+            // Animate gates in sequence
+            gates.forEach((gate, index) => {
+                setTimeout(() => {
+                    gate.classList.add('gate-sequence');
+                    
+                    // Add pulse effect after sequence animation
+                    setTimeout(() => {
+                        gate.classList.remove('gate-sequence');
+                        gate.classList.add('gate-pulse');
+                    }, 800);
+                }, delay);
+                delay += 300;
+            });
+            
+            showNotification('success', 'Circuit Animation', 'Playing quantum gate sequence');
+        }
+
+        // Reset circuit view
+        function resetCircuitView(jobId) {
+            const svgElement = document.getElementById(`circuit_${jobId}`);
+            if (!svgElement) return;
+
+            const gates = svgElement.querySelectorAll('[id^="gate_"]');
+            gates.forEach(gate => {
+                gate.classList.remove('gate-sequence', 'gate-pulse');
+                gate.style.transform = '';
+                gate.style.filter = '';
+            });
+            
+            showNotification('info', 'Circuit Reset', 'Circuit view has been reset');
+        }
+
+        // Show gate information
+        function showGateInfo(jobId, gateType, gateIndex) {
+            const gateDescriptions = {
+                'H': 'Hadamard Gate - Creates superposition by rotating qubit state',
+                'X': 'Pauli-X Gate - Bit flip operation (quantum NOT gate)',
+                'Y': 'Pauli-Y Gate - Bit and phase flip operation',
+                'Z': 'Pauli-Z Gate - Phase flip operation',
+                'S': 'S Gate - Quarter phase rotation (π/2)',
+                'T': 'T Gate - Eighth phase rotation (π/4)',
+                'RX': 'Rotation-X Gate - Rotation around X-axis',
+                'RY': 'Rotation-Y Gate - Rotation around Y-axis',
+                'RZ': 'Rotation-Z Gate - Rotation around Z-axis',
+                'CNOT': 'Controlled-NOT Gate - Entangles two qubits',
+                'CZ': 'Controlled-Z Gate - Conditional phase flip',
+                'I': 'Identity Gate - No operation (placeholder)'
+            };
+            
+            const description = gateDescriptions[gateType] || 'Unknown gate operation';
+            showNotification('info', `${gateType} Gate`, description, 4000);
+        }
+
+        // Show measurement information
+        function showMeasurementInfo(jobId, qubit) {
+            showNotification('info', `Qubit ${qubit} Measurement`, `This measurement collapses the quantum state of qubit ${qubit} to either |0⟩ or |1⟩`, 3000);
+        }
+
+        // Populate gate legend
+        function populateGateLegend(jobId, gateTypes) {
+            const legendContainer = document.getElementById(`gateLegend_${jobId}`);
+            if (!legendContainer) return;
+
+            const gateColors = {
+                'H': '#3b82f6', 'X': '#ef4444', 'Y': '#f59e0b', 'Z': '#8b5cf6',
+                'S': '#10b981', 'T': '#f97316', 'RX': '#14b8a6', 'RY': '#84cc16',
+                'RZ': '#a855f7', 'CNOT': '#ec4899', 'CZ': '#8b5cf6', 'I': '#6b7280'
+            };
+
+            legendContainer.innerHTML = gateTypes.map(gateType => `
+                <div class="flex items-center space-x-2 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
+                    <div class="w-4 h-4 rounded" style="background-color: ${gateColors[gateType] || '#6b7280'}"></div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${gateType}</span>
+                </div>
+            `).join('');
+        }
+
+        // Generate custom circuit diagram (legacy function for circuit builder)
+        function generateCustomCircuitDiagram(circuitData, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container || !circuitData || !circuitData.gates) return;
+            
+            const gates = circuitData.gates;
+            const maxQubit = Math.max(...gates.map(g => g.target)) + 1;
+            const maxStep = Math.max(...gates.map(g => g.step)) + 1;
+            
+            // Create SVG circuit diagram
+            const svgWidth = Math.max(400, maxStep * 80 + 120);
+            const svgHeight = Math.max(200, maxQubit * 80 + 80);
+            
+            let svg = `
+                <svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" class="w-full max-w-4xl mx-auto">
+                    <defs>
+                        <style>
+                            .qubit-line { stroke: #374151; stroke-width: 2; }
+                            .gate-rect { fill: #3b82f6; stroke: #1d4ed8; stroke-width: 2; rx: 8; }
+                            .gate-text { fill: white; font-family: 'Inter', sans-serif; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+                            .control-dot { fill: #374151; }
+                            .control-line { stroke: #374151; stroke-width: 2; }
+                            .qubit-label { fill: #374151; font-family: 'Inter', sans-serif; font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
+                        </style>
+                    </defs>
+            `;
+            
+            // Draw qubit lines
+            for (let q = 0; q < maxQubit; q++) {
+                const y = 60 + q * 80;
+                svg += `<line x1="60" y1="${y}" x2="${svgWidth - 40}" y2="${y}" class="qubit-line"/>`;
+                svg += `<text x="30" y="${y}" class="qubit-label" font-size="16">q${q}</text>`;
+            }
+            
+            // Draw gates
+            gates.forEach(gate => {
+                const x = 100 + gate.step * 80;
+                const y = 60 + gate.target * 80;
+                
+                if (gate.type === 'CNOT' || gate.type === 'CZ') {
+                    // Two-qubit gates
+                    const controlY = 60 + gate.control * 80;
+                    const targetY = y;
+                    
+                    // Control dot
+                    svg += `<circle cx="${x}" cy="${controlY}" r="6" class="control-dot"/>`;
+                    
+                    // Control line
+                    svg += `<line x1="${x}" y1="${Math.min(controlY, targetY)}" x2="${x}" y2="${Math.max(controlY, targetY)}" class="control-line"/>`;
+                    
+                    // Target gate
+                    if (gate.type === 'CNOT') {
+                        svg += `<circle cx="${x}" cy="${targetY}" r="20" fill="white" stroke="#374151" stroke-width="2"/>`;
+                        svg += `<line x1="${x-12}" y1="${targetY}" x2="${x+12}" y2="${targetY}" stroke="#374151" stroke-width="2"/>`;
+                        svg += `<line x1="${x}" y1="${targetY-12}" x2="${x}" y2="${targetY+12}" stroke="#374151" stroke-width="2"/>`;
+                    } else {
+                        svg += `<rect x="${x-20}" y="${targetY-20}" width="40" height="40" class="gate-rect"/>`;
+                        svg += `<text x="${x}" y="${targetY}" class="gate-text" font-size="14">Z</text>`;
+                    }
+                } else {
+                    // Single-qubit gates
+                    let gateColor = '#3b82f6';
+                    let gateText = gate.type;
+                    
+                    // Color coding for different gates
+                    switch (gate.type) {
+                        case 'H': gateColor = '#3b82f6'; break;
+                        case 'X': gateColor = '#ef4444'; break;
+                        case 'Y': gateColor = '#f59e0b'; break;
+                        case 'Z': gateColor = '#8b5cf6'; break;
+                        case 'S': gateColor = '#10b981'; break;
+                        case 'T': gateColor = '#f97316'; break;
+                        case 'RX': gateColor = '#14b8a6'; gateText = 'RX'; break;
+                        case 'RY': gateColor = '#84cc16'; gateText = 'RY'; break;
+                        case 'RZ': gateColor = '#a855f7'; gateText = 'RZ'; break;
+                    }
+                    
+                    svg += `<rect x="${x-20}" y="${y-20}" width="40" height="40" fill="${gateColor}" stroke="${gateColor}" stroke-width="2" rx="8"/>`;
+                    svg += `<text x="${x}" y="${y}" class="gate-text" font-size="14">${gateText}</text>`;
+                    
+                    // Add angle annotation for rotation gates
+                    if (gate.angle !== undefined) {
+                        const angleText = gate.angle === Math.PI/2 ? 'π/2' : 
+                                         gate.angle === Math.PI ? 'π' : 
+                                         gate.angle === Math.PI/4 ? 'π/4' : 
+                                         gate.angle.toFixed(2);
+                        svg += `<text x="${x}" y="${y+35}" fill="#6b7280" font-size="10" text-anchor="middle">${angleText}</text>`;
+                    }
+                }
+            });
+            
+            svg += '</svg>';
+            
+            container.innerHTML = `
+                <div class="text-center">
+                    <h5 class="text-sm font-medium text-gray-700 mb-3">Custom Quantum Circuit</h5>
+                    ${svg}
+                    <p class="text-xs text-gray-500 mt-2">${gates.length} gates • ${maxQubit} qubits • ${maxStep} steps</p>
+                </div>
+            `;
+        }
+
+        // Event listeners
+
+        // Initialize the application
+        init();
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9767180100e09371',t:'MTc1NjQxODU1NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
+

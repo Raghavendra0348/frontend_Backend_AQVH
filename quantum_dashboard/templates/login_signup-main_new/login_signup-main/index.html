@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Login</title>
+    <link rel="stylesheet" href="login.css">
+
+    <script src="login.js" defer></script>
+    <link rel="icon" href="favico.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script type="module" src="firebase.js"> </script>
+
+</head>
+
+<body>
+    <canvas id="bgCanvas"></canvas>
+    <div class="container">
+        <div class="card">
+            <div class="forms-container">
+                <div class="form-container login-form">
+                    <h2>Welcome Back</h2>
+                    <form id="loginForm">
+                        <div class="input-group">
+                            <input type="email" id="loginEmail" placeholder="Email address" required>
+                        </div>
+
+                        <div class="input-group password-group">
+                            <input type="password" id="loginPassword" placeholder="Password" required>
+                            <span class="toggle-password" onclick="togglePassword()">
+                                <i id="eyeIcon" class="fa-solid fa-eye"></i>
+                            </span>
+                        </div>
+
+                        <button type="submit">Sign In</button>
+
+
+                        <div class="error-message" style="color: red; display: none;"></div>
+
+                    </form>
+                    <div class="separator">
+                        <span>or continue with</span>
+                    </div>
+
+                    <div class="social-buttons">
+                        <button class="social-button" onclick="socialLogin('Google')">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-0.013z" />
+                            </svg>
+                        </button>
+                        <button class="social-button" onclick="socialLogin('GitHub')">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.137 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+                            </svg>
+                        </button>
+                        <button class="social-button" onclick="socialLogin('X')">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="switch-form">
+                        <p>Don't have an account? <a onclick="toggleForm()">Sign Up</a></p>
+                    </div>
+
+                </div>
+
+                <div class="form-container signup-form">
+                    <h2>Create Account</h2>
+                    <form id="signupForm">
+                        <div class="input-group">
+                            <input type="text" id="signupName" placeholder="Full name" required>
+                        </div>
+                        <div class="input-group">
+                            <input type="email" id="signupEmail" placeholder="Email address" required>
+                        </div>
+                        <div class="input-group">
+                            <input type="password" id="signupPassword" placeholder="Create password" required>
+                        </div>
+                        <button type="submit">Sign Up</button>
+                        <div class="error-message" style="color: red; display: none;"></div>
+
+                    </form>
+
+                    <div class="separator">
+                        <span>or continue with</span>
+                    </div>
+
+                    <div class="social-buttons">
+                        <button class="social-button" onclick="socialLogin('Google')">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M12.545 10.239v3.821h5.445c-0.712 2.315-2.647 3.972-5.445 3.972-3.332 0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498 0 2.866 0.549 3.921 1.453l2.814-2.814C17.503 2.988 15.139 2 12.545 2 7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-0.013z" />
+                            </svg>
+                        </button>
+                        <button class="social-button" onclick="socialLogin('GitHub')">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.137 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+                            </svg>
+                        </button>
+                        <button class="social-button" onclick="socialLogin('X')">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="switch-form">
+                        <p>Already have an account? <a onclick="toggleForm()">Sign In</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Futuristic glowing network background
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        let nodes = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function createNodes(num) {
+            nodes = [];
+            for (let i = 0; i < num; i++) {
+                nodes.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.7,
+                    vy: (Math.random() - 0.5) * 0.7,
+                    radius: 2 + Math.random() * 2
+                });
+            }
+        }
+        createNodes(60);
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw lines between close nodes
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    let dx = nodes[i].x - nodes[j].x;
+                    let dy = nodes[i].y - nodes[j].y;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 120) {
+                        ctx.save();
+                        ctx.globalAlpha = 1 - dist / 120;
+                        ctx.strokeStyle = '#00fff7';
+                        ctx.shadowColor = '#00fff7';
+                        ctx.shadowBlur = 8;
+                        ctx.beginPath();
+                        ctx.moveTo(nodes[i].x, nodes[i].y);
+                        ctx.lineTo(nodes[j].x, nodes[j].y);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                }
+            }
+            // Draw nodes
+            nodes.forEach(node => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#00fff7';
+                ctx.shadowColor = '#00fff7';
+                ctx.shadowBlur = 16;
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function animate() {
+            nodes.forEach(node => {
+                node.x += node.vx;
+                node.y += node.vy;
+                if (node.x < 0 || node.x > canvas.width) node.vx *= -1;
+                if (node.y < 0 || node.y > canvas.height) node.vy *= -1;
+            });
+            drawNetwork();
+            requestAnimationFrame(animate);
+        }
+        animate();
+    </script>
+    <style>
+        #bgCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            display: block;
+            background: radial-gradient(ellipse at top left, #23243a 0%, #0f2027 100%);
+        }
+    </style>
+</body>
+
+</html>
